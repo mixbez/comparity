@@ -1,4 +1,5 @@
-import { getSession, redisSub } from '../../redis/session.js';
+import { getSession } from '../../redis/session.js';
+import { redisSub } from '../../redis/client.js';
 import { createSession, processMove, processChallenge, GameError } from '../../game/session.js';
 import { getAllDecks } from '../../db/models/deck.js';
 
