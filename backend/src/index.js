@@ -14,21 +14,25 @@ async function main() {
   await redis.ping();
   console.log('[Redis] Connected');
 
-  // Start API server
-  const server = await createServer();
-  await server.listen({ port: PORT, host: '0.0.0.0' });
-  console.log(`[API] Fastify running on port ${PORT}`);
-
   // Start bot
   const bot = createBot();
 
+  // Start API server
+  const server = await createServer();
+
   if (process.env.NODE_ENV === 'production') {
-    await bot.telegram.setWebhook(`${process.env.BOT_WEBHOOK_URL}`);
-    // Webhook handled by Fastify route /webhook
+    // Register webhook route before listen
     server.post('/webhook', (req, reply) => {
       bot.handleUpdate(req.body);
       reply.send({ ok: true });
     });
+  }
+
+  await server.listen({ port: PORT, host: '0.0.0.0' });
+  console.log(`[API] Fastify running on port ${PORT}`);
+
+  if (process.env.NODE_ENV === 'production') {
+    await bot.telegram.setWebhook(`${process.env.BOT_WEBHOOK_URL}`);
     console.log('[Bot] Webhook set');
   } else {
     await bot.launch();
