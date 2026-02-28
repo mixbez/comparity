@@ -62,8 +62,8 @@ CREATE INDEX IF NOT EXISTS idx_cards_value ON cards(deck_id, hidden_value);
 -- ================================================================
 -- SESSIONS
 -- ================================================================
-CREATE TYPE IF NOT EXISTS session_type   AS ENUM ('SOLO', 'GROUP');
-CREATE TYPE IF NOT EXISTS session_status AS ENUM ('WAITING', 'ACTIVE', 'FINISHED', 'ABANDONED');
+DO $$ BEGIN CREATE TYPE session_type AS ENUM ('SOLO', 'GROUP'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE session_status AS ENUM ('WAITING', 'ACTIVE', 'FINISHED', 'ABANDONED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS sessions (
   id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -118,10 +118,7 @@ CREATE INDEX IF NOT EXISTS idx_chain_cards ON chain_cards(session_id, position);
 -- ================================================================
 -- TURNS
 -- ================================================================
-CREATE TYPE IF NOT EXISTS turn_status AS ENUM (
-  'PENDING', 'ACCEPTED', 'CORRECT', 'INCORRECT',
-  'CHALLENGED', 'BLUFF_CAUGHT', 'BLUFF_HELD'
-);
+DO $$ BEGIN CREATE TYPE turn_status AS ENUM ('PENDING', 'ACCEPTED', 'CORRECT', 'INCORRECT', 'CHALLENGED', 'BLUFF_CAUGHT', 'BLUFF_HELD'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS turns (
   id                  SERIAL      PRIMARY KEY,
