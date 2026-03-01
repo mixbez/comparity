@@ -41,7 +41,7 @@ export async function startGame(ctx, deckId) {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      buttonType: 'webApp',
+      miniAppUrlType: typeof miniAppUrl,
     });
 
     console.log('[Play] Sending game message with webApp button...');
@@ -49,7 +49,7 @@ export async function startGame(ctx, deckId) {
     // Delete loading message
     await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
 
-    // Send new message with webApp button
+    // Send new message with webApp button (manual button creation)
     await ctx.reply(
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
@@ -60,9 +60,16 @@ export async function startGame(ctx, deckId) {
       `Куда её поставить в цепочке?`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
-        ]),
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: '🎯 Открыть игру',
+                web_app: { url: miniAppUrl },
+              },
+            ],
+          ],
+        },
       }
     );
     console.log('[Play] Message sent successfully');
