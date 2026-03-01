@@ -86,12 +86,18 @@ export default function PlayerCard() {
                   src={card.imageUrl}
                   alt={card.title}
                   className="w-full h-20 object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="w-full h-20 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center text-3xl">
-                  🎴
-                </div>
-              )}
+              ) : null}
+              <div
+                className="w-full h-20 bg-gradient-to-br from-blue-50 to-indigo-100 items-center justify-center text-3xl"
+                style={{ display: card.imageUrl ? 'none' : 'flex' }}
+              >
+                🎴
+              </div>
               <div className="flex-1 px-2 py-1.5 flex flex-col">
                 <p className="text-xs font-semibold text-gray-800 leading-tight line-clamp-2">
                   {card.title}

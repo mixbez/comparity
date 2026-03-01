@@ -211,7 +211,9 @@ export async function processMove({ sessionId, userId, cardId, position, isBluff
     chain: newChain,
     turnResult: { status: turnStatus, scoreDelta },
     players,
-    nextCard: nextCard ? formatCard(nextCard) : null,
+    currentTurn: nextCard
+      ? { userId: String(userId), card: formatCard(nextCard), startedAt: new Date().toISOString() }
+      : null,
     gameOver,
     winners: gameOver ? getWinners(players) : null,
   });
@@ -303,7 +305,9 @@ export async function processChallenge({ sessionId, challengerId }) {
     scoreDeltaPlacer,
     scoreDeltaChallenger,
     revealedCard: { ...formatCard(card), displayValue: card.display_value },
-    nextCard: nextCard ? formatCard(nextCard) : null,
+    currentTurn: nextCard
+      ? { userId: String(pending.placerId), card: formatCard(nextCard), startedAt: new Date().toISOString() }
+      : null,
     gameOver,
   });
 
