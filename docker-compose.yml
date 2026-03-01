@@ -52,6 +52,7 @@ services:
       BOT_TOKEN: ${BOT_TOKEN}
       BOT_WEBHOOK_URL: ${BOT_WEBHOOK_URL}
       MINI_APP_URL: ${MINI_APP_URL}
+      MINI_APP_SHORT_NAME: ${MINI_APP_SHORT_NAME:-}
       JWT_SECRET: ${JWT_SECRET}
       PORT: 3000
     depends_on:
