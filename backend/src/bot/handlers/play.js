@@ -29,12 +29,12 @@ export async function handleGroupStart(ctx) {
 
 export async function startGame(ctx, deckId, gameType = 'SOLO') {
   const userId = ctx.from.id;
+  const isGroup = gameType === 'GROUP';
   const chatId = ctx.chat?.id;
   console.log('[Play] startGame called:', { userId, deckId, gameType, chatId });
   const loadingMsg = await ctx.reply('⏳ Создаём игру...');
 
   try {
-    console.log('[Play] Creating session...');
     const { sessionId, session } = await createSession({
       userId,
       deckId,
@@ -44,36 +44,25 @@ export async function startGame(ctx, deckId, gameType = 'SOLO') {
 
     const startingCard = session.chain[0];
     const nextCard = session.currentTurn?.card;
-
     const miniAppUrl = buildMiniAppUrl(sessionId, isGroup);
+
     console.log('[Play] Session created:', {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      miniAppUrlType: typeof miniAppUrl,
+      buttonType: isGroup ? 'url' : 'webApp',
     });
 
-    console.log('[Play] Sending game message with webApp button...');
+    // Use url button for groups (webApp buttons only work in private chats),
+    // webApp button for private chats (enables Telegram Mini App API)
+    const button = isGroup
+      ? Markup.button.url('🎯 Открыть игру', miniAppUrl)
+      : Markup.button.webApp('🎯 Открыть игру', miniAppUrl);
 
-    // Delete loading message
+    // Delete loading message and send the game message
     await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
 
-    // Build reply markup using Markup helper
-    const markup = Markup.inlineKeyboard([
-      [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
-    ]);
-
-    console.log('[Play] Markup structure:', JSON.stringify(markup, null, 2));
-    console.log('[Play] Button details:', {
-      text: '🎯 Открыть игру',
-      web_app_url: miniAppUrl,
-      web_app_url_type: typeof miniAppUrl,
-      web_app_url_length: miniAppUrl?.length,
-      web_app_url_valid: miniAppUrl?.startsWith('http'),
-    });
-
-    // Send new message with webApp button
-    const result = await ctx.reply(
+    await ctx.reply(
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
       `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -83,10 +72,10 @@ export async function startGame(ctx, deckId, gameType = 'SOLO') {
       `Куда её поставить в цепочке?`,
       {
         parse_mode: 'Markdown',
-        ...markup,
+        ...Markup.inlineKeyboard([[button]]),
       }
     );
-    console.log('[Play] Message sent successfully:', { message_id: result.message_id });
+    console.log('[Play] Game message sent successfully');
   } catch (err) {
     console.error('[Play] Error:', {
       message: err.message,
@@ -102,11 +91,9 @@ export async function startGame(ctx, deckId, gameType = 'SOLO') {
 function buildMiniAppUrl(sessionId, isGroup) {
   const baseUrl = process.env.MINI_APP_URL;
 
-  // For groups, optionally use Telegram deep link if bot username is configured
   if (isGroup && process.env.BOT_USERNAME && process.env.MINI_APP_SHORT_NAME) {
     return `https://t.me/${process.env.BOT_USERNAME}/${process.env.MINI_APP_SHORT_NAME}?startapp=${sessionId}`;
   }
 
-  // Fallback: direct URL for both private and groups
   return `${baseUrl}?sessionId=${sessionId}`;
 }
