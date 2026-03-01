@@ -182,9 +182,9 @@ export async function processMove({ sessionId, userId, cardId, position, isBluff
   const remaining = session.allCardIds.filter((id) => !usedIds.has(id));
   const gameOver = isGameOver(newChain, MAX_CHAIN_LENGTH, remaining.length);
 
-  // Draw next card
+  // Draw next card (always, so the game doesn't freeze in solo mode after a bluff)
   let nextCard = null;
-  if (!gameOver && !isBluff) {
+  if (!gameOver) {
     const allCards = await getCardsForIds(remaining.slice(0, 20)); // fetch a batch
     nextCard = drawCard(allCards, usedIds);
     if (nextCard) usedIds.add(nextCard.id);
