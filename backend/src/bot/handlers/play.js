@@ -24,14 +24,16 @@ export async function handleGroupStart(ctx) {
   const data = ctx.callbackQuery.data;
   const deckId = parseInt(data.split(':')[1]);
   await ctx.answerCbQuery();
-  await startGame(ctx, deckId, 'GROUP');
+  await startGame(ctx, deckId);
 }
 
-export async function startGame(ctx, deckId, gameType = 'SOLO') {
+export async function startGame(ctx, deckId) {
   const userId = ctx.from.id;
-  const isGroup = gameType === 'GROUP';
+  const chatType = ctx.chat?.type;
+  const isGroup = chatType === 'group' || chatType === 'supergroup';
+  const gameType = isGroup ? 'GROUP' : 'SOLO';
   const chatId = ctx.chat?.id;
-  console.log('[Play] startGame called:', { userId, deckId, gameType, chatId });
+  console.log('[Play] startGame called:', { userId, deckId, gameType, chatType, chatId });
   const loadingMsg = await ctx.reply('⏳ Создаём игру...');
 
   try {
