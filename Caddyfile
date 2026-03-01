@@ -1,0 +1,12 @@
+v2202504269079335176.supersrv.de {
+    tls bezverhiymix@gmail.com {
+        ca https://acme.zerossl.com/v2/DV90
+    }
+
+    # Backend: API и Webhook
+    reverse_proxy /api/* backend:3000
+    reverse_proxy /webhook backend:3000
+
+    # Frontend: всё остальное
+    reverse_proxy * frontend:80
+}

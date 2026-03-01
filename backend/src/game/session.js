@@ -182,9 +182,9 @@ export async function processMove({ sessionId, userId, cardId, position, isBluff
   const remaining = session.allCardIds.filter((id) => !usedIds.has(id));
   const gameOver = isGameOver(newChain, MAX_CHAIN_LENGTH, remaining.length);
 
-  // Draw next card
+  // Draw next card (always, so the game doesn't freeze in solo mode after a bluff)
   let nextCard = null;
-  if (!gameOver && !isBluff) {
+  if (!gameOver) {
     const allCards = await getCardsForIds(remaining.slice(0, 20)); // fetch a batch
     nextCard = drawCard(allCards, usedIds);
     if (nextCard) usedIds.add(nextCard.id);
@@ -211,7 +211,9 @@ export async function processMove({ sessionId, userId, cardId, position, isBluff
     chain: newChain,
     turnResult: { status: turnStatus, scoreDelta },
     players,
-    nextCard: nextCard ? formatCard(nextCard) : null,
+    currentTurn: nextCard
+      ? { userId: String(userId), card: formatCard(nextCard), startedAt: new Date().toISOString() }
+      : null,
     gameOver,
     winners: gameOver ? getWinners(players) : null,
   });
@@ -303,7 +305,9 @@ export async function processChallenge({ sessionId, challengerId }) {
     scoreDeltaPlacer,
     scoreDeltaChallenger,
     revealedCard: { ...formatCard(card), displayValue: card.display_value },
-    nextCard: nextCard ? formatCard(nextCard) : null,
+    currentTurn: nextCard
+      ? { userId: String(pending.placerId), card: formatCard(nextCard), startedAt: new Date().toISOString() }
+      : null,
     gameOver,
   });
 

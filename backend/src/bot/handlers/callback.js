@@ -6,13 +6,19 @@ import { Markup } from 'telegraf';
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
 
+  // Deck selection from /start or /decks
+  if (data.startsWith('deck:') || data.startsWith('play:')) {
+    await ctx.answerCbQuery();
+    const deckId = parseInt(data.split(':')[1]);
+    return startGame(ctx, deckId);
+  }
+
   // Group game start (from inline message) — manages answerCbQuery itself
   if (data.startsWith('group_start:')) {
     const deckId = parseInt(data.split(':')[1]);
     const userId = ctx.from.id;
-    const chatId = ctx.chat?.id;
-
-    if (!chatId) return ctx.answerCbQuery('Только для групповых чатов');
+    // For inline messages ctx.chat is null — get chatId from message if available
+    const chatId = ctx.callbackQuery.message?.chat?.id ?? null;
 
     try {
       const { sessionId, session } = await createSession({
@@ -34,7 +40,7 @@ export async function handleCallback(ctx) {
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
+            [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
             [Markup.button.callback('⚔️ Оспорить!', `challenge:${sessionId}`)],
           ]),
         }
@@ -62,6 +68,7 @@ export async function handleCallback(ctx) {
     const challengerId = ctx.from.id;
 
     try {
+      await ctx.answerCbQuery();
       const result = await processChallenge({ sessionId, challengerId });
       const icon = result.bluffCaught ? '🎯' : '🛡';
       const msg = result.bluffCaught
@@ -74,8 +81,10 @@ export async function handleCallback(ctx) {
           .join('')
       );
     } catch (err) {
-      await ctx.answerCbQuery(err.message, { show_alert: true });
+      await ctx.answerCbQuery(err.message, { show_alert: true }).catch(() => {});
     }
     return;
   }
+
+  await ctx.answerCbQuery();
 }

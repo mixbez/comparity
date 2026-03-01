@@ -27,8 +27,45 @@ export const useGameStore = create((set, get) => ({
     }
   },
 
-  updateSession: (session) => {
-    set({ session, status: session.status === 'FINISHED' ? 'finished' : 'playing' });
+  /**
+   * Update session from an SSE event or full session replacement.
+   * If data looks like a full session (has 'id'), replace entirely.
+   * Otherwise merge the event payload fields into the existing session.
+   */
+  updateSession: (data) => {
+    set((s) => {
+      // Full session replacement (STATE event or initial load)
+      if ('id' in data && 'deckId' in data) {
+        return {
+          session: data,
+          status: data.status === 'FINISHED' ? 'finished' : 'playing',
+        };
+      }
+
+      // Partial event payload — merge into existing session
+      const session = s.session;
+      if (!session) return { session: data };
+
+      const merged = {
+        ...session,
+        ...(data.chain !== undefined && { chain: data.chain }),
+        ...(data.players !== undefined && { players: data.players }),
+        // currentTurn: explicit null means no next card; undefined means keep current
+        ...('currentTurn' in data && { currentTurn: data.currentTurn }),
+        ...(data.gameOver && { status: 'FINISHED' }),
+      };
+
+      return {
+        session: merged,
+        status: data.gameOver ? 'finished' : (s.status === 'loading' ? 'playing' : s.status),
+        ...(data.turnResult && {
+          lastResult: {
+            type: data.turnResult.status?.toLowerCase(),
+            delta: data.turnResult.scoreDelta,
+          },
+        }),
+      };
+    });
   },
 
   setDraggedCard: (card) => set({ draggedCard: card, pendingPosition: null }),

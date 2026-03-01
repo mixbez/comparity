@@ -40,7 +40,9 @@ async function main() {
   }
 
   const shutdown = async () => {
-    await bot.stop();
+    if (process.env.NODE_ENV !== 'production') {
+      bot.stop();
+    }
     await server.close();
     await db.end();
     redis.disconnect();

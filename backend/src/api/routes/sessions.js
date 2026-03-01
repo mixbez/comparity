@@ -70,7 +70,16 @@ export async function sessionRoutes(fastify) {
   });
 
   // GET /api/sessions/:id/stream — SSE for real-time updates
-  fastify.get('/:id/stream', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  // EventSource cannot set custom headers, so token is accepted via query param too
+  fastify.get('/:id/stream', async (request, reply) => {
+    const token = request.headers.authorization?.split(' ')[1] || request.query.token;
+    if (!token) return reply.code(401).send({ error: 'Unauthorized' });
+    try {
+      request.user = fastify.jwt.verify(token);
+    } catch {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+
     const sessionId = request.params.id;
 
     reply.raw.writeHead(200, {
