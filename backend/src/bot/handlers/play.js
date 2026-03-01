@@ -55,7 +55,7 @@ export async function startGame(ctx, deckId) {
         [
           {
             text: '🎯 Открыть игру',
-            url: miniAppUrl,
+            web_app: { url: miniAppUrl },
           },
         ],
       ],
