@@ -3,6 +3,19 @@ import { createSession, processChallenge } from '../../game/session.js';
 import { getSession } from '../../redis/session.js';
 import { Markup } from 'telegraf';
 
+// Build Mini App URL with support for Telegram deep links in groups
+function buildMiniAppUrl(sessionId, isGroup = false) {
+  const baseUrl = process.env.MINI_APP_URL;
+
+  // For groups, optionally use Telegram deep link if bot username is configured
+  if (isGroup && process.env.BOT_USERNAME && process.env.MINI_APP_SHORT_NAME) {
+    return `https://t.me/${process.env.BOT_USERNAME}/${process.env.MINI_APP_SHORT_NAME}?startapp=${sessionId}`;
+  }
+
+  // Fallback: direct URL for both private and groups
+  return `${baseUrl}?sessionId=${sessionId}`;
+}
+
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
   console.log('[Callback] Received:', { data, userId: ctx.from.id, chatId: ctx.chat?.id });
@@ -32,17 +45,17 @@ export async function handleCallback(ctx) {
 
       const startingCard = session.chain[0];
       const nextCard = session.currentTurn?.card;
-      const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
+      const miniAppUrl = buildMiniAppUrl(sessionId, true);
 
       console.log('[Callback] group_start data:', {
         sessionId,
         deckName: session.deckName,
         miniAppUrl,
         buttonsCount: 2,
-        buttonTypes: ['webApp', 'callback'],
+        buttonTypes: ['url', 'callback'],
       });
 
-      // Send new message with webApp button (inline messages don't support webApp)
+      // Send new message with url button (webApp not supported in groups)
       await ctx.reply(
         `🎮 *Групповая игра: ${session.deckName}*\n\n` +
         `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -51,13 +64,13 @@ export async function handleCallback(ctx) {
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
+            [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
             [Markup.button.callback('⚔️ Оспорить!', `challenge:${sessionId}`)],
           ]),
         }
       );
       await ctx.answerCbQuery();
-      console.log('[Callback] group_start success: message edited and callback answered');
+      console.log('[Callback] group_start success: message sent and callback answered');
     } catch (err) {
       console.error('[Callback] group_start error:', {
         message: err.message,
@@ -73,13 +86,6 @@ export async function handleCallback(ctx) {
 
   // For all other callbacks answer immediately
   await ctx.answerCbQuery();
-
-  // Deck selection from /start or /decks
-  if (data.startsWith('deck:') || data.startsWith('play:')) {
-    const deckId = parseInt(data.split(':')[1]);
-    console.log('[Callback] Deck selection:', { deckId });
-    return startGame(ctx, deckId);
-  }
 
   // Challenge button
   if (data.startsWith('challenge:')) {

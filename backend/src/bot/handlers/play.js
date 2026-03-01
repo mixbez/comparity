@@ -22,7 +22,11 @@ export async function handlePlay(ctx) {
 
 export async function startGame(ctx, deckId) {
   const userId = ctx.from.id;
-  console.log('[Play] startGame called:', { userId, deckId });
+  const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+  const sessionType = isGroup ? 'GROUP' : 'SOLO';
+  const chatId = isGroup ? ctx.chat.id : null;
+
+  console.log('[Play] startGame called:', { userId, deckId, isGroup, sessionType });
   const loadingMsg = await ctx.reply('⏳ Создаём игру...');
 
   try {
@@ -30,21 +34,27 @@ export async function startGame(ctx, deckId) {
     const { sessionId, session } = await createSession({
       userId,
       deckId,
-      type: 'SOLO',
+      type: sessionType,
+      chatId,
     });
 
     const startingCard = session.chain[0];
     const nextCard = session.currentTurn?.card;
 
-    const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
+    const miniAppUrl = buildMiniAppUrl(sessionId, isGroup);
     console.log('[Play] Session created:', {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      buttonType: 'url',
+      buttonType: isGroup ? 'url' : 'webApp',
+      gameType: sessionType,
     });
 
     console.log('[Play] Editing message with inline keyboard...');
+    const buttons = isGroup
+      ? [Markup.button.url('🎯 Открыть игру', miniAppUrl)]
+      : [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)];
+
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       loadingMsg.message_id,
@@ -58,9 +68,7 @@ export async function startGame(ctx, deckId) {
       `Куда её поставить в цепочке?`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
-        ]),
+        ...Markup.inlineKeyboard([buttons]),
       }
     );
     console.log('[Play] Message edited successfully');
@@ -83,4 +91,16 @@ export async function startGame(ctx, deckId) {
       console.error('[Play] Failed to edit error message:', editErr.message);
     }
   }
+}
+
+function buildMiniAppUrl(sessionId, isGroup) {
+  const baseUrl = process.env.MINI_APP_URL;
+
+  // For groups, optionally use Telegram deep link if bot username is configured
+  if (isGroup && process.env.BOT_USERNAME && process.env.MINI_APP_SHORT_NAME) {
+    return `https://t.me/${process.env.BOT_USERNAME}/${process.env.MINI_APP_SHORT_NAME}?startapp=${sessionId}`;
+  }
+
+  // Fallback: direct URL for both private and groups
+  return `${baseUrl}?sessionId=${sessionId}`;
 }
