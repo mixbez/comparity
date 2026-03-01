@@ -39,10 +39,11 @@ export async function handleCallback(ctx) {
         deckName: session.deckName,
         miniAppUrl,
         buttonsCount: 2,
-        buttonTypes: ['url', 'callback'],
+        buttonTypes: ['webApp', 'callback'],
       });
 
-      await ctx.editMessageText(
+      // Send new message with webApp button (inline messages don't support webApp)
+      await ctx.reply(
         `🎮 *Групповая игра: ${session.deckName}*\n\n` +
         `📏 Параметр: *${session.deckParameterName}*\n\n` +
         `🃏 Цепочка начата с: *${startingCard.title}* (${startingCard.displayValue})\n\n` +
@@ -50,7 +51,7 @@ export async function handleCallback(ctx) {
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
+            [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
             [Markup.button.callback('⚔️ Оспорить!', `challenge:${sessionId}`)],
           ]),
         }
