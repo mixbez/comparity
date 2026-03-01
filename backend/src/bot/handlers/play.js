@@ -93,15 +93,6 @@ export async function startGame(ctx, deckId) {
       status: err.response?.status,
       stack: err.stack,
     });
-    try {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        '❌ Не удалось создать игру. Попробуй ещё раз.'
-      );
-    } catch (editErr) {
-      console.error('[Play] Failed to edit error message:', editErr.message);
-    }
+    await ctx.reply('❌ Не удалось создать игру. Попробуй ещё раз.');
   }
 }
