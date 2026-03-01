@@ -4,7 +4,6 @@ import { handlePlay } from './handlers/play.js';
 import { handleStats } from './handlers/stats.js';
 import { handleDecks } from './handlers/decks.js';
 import { handleStop } from './handlers/stop.js';
-import { handleInlineQuery } from './handlers/inline.js';
 import { handleCallback } from './handlers/callback.js';
 import { upsertUser } from '../db/models/user.js';
 
@@ -41,9 +40,6 @@ export function createBot() {
       { parse_mode: 'Markdown' }
     )
   );
-
-  // Inline mode (for group games)
-  bot.on('inline_query', handleInlineQuery);
 
   // Callback buttons
   bot.on('callback_query', handleCallback);

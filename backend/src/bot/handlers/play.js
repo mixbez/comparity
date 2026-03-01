@@ -20,13 +20,17 @@ export async function handlePlay(ctx) {
   });
 }
 
-export async function startGame(ctx, deckId) {
-  const userId = ctx.from.id;
-  const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
-  const sessionType = isGroup ? 'GROUP' : 'SOLO';
-  const chatId = isGroup ? ctx.chat.id : null;
+export async function handleGroupStart(ctx) {
+  const data = ctx.callbackQuery.data;
+  const deckId = parseInt(data.split(':')[1]);
+  await ctx.answerCbQuery();
+  await startGame(ctx, deckId, 'GROUP');
+}
 
-  console.log('[Play] startGame called:', { userId, deckId, isGroup, sessionType });
+export async function startGame(ctx, deckId, gameType = 'SOLO') {
+  const userId = ctx.from.id;
+  const chatId = ctx.chat?.id;
+  console.log('[Play] startGame called:', { userId, deckId, gameType, chatId });
   const loadingMsg = await ctx.reply('⏳ Создаём игру...');
 
   try {
@@ -34,7 +38,7 @@ export async function startGame(ctx, deckId) {
     const { sessionId, session } = await createSession({
       userId,
       deckId,
-      type: sessionType,
+      type: gameType,
       chatId,
     });
 
@@ -46,19 +50,30 @@ export async function startGame(ctx, deckId) {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      buttonType: isGroup ? 'url' : 'webApp',
-      gameType: sessionType,
+      miniAppUrlType: typeof miniAppUrl,
     });
 
-    console.log('[Play] Editing message with inline keyboard...');
-    const buttons = isGroup
-      ? [Markup.button.url('🎯 Открыть игру', miniAppUrl)]
-      : [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)];
+    console.log('[Play] Sending game message with webApp button...');
 
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      null,
+    // Delete loading message
+    await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
+
+    // Build reply markup using Markup helper
+    const markup = Markup.inlineKeyboard([
+      [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
+    ]);
+
+    console.log('[Play] Markup structure:', JSON.stringify(markup, null, 2));
+    console.log('[Play] Button details:', {
+      text: '🎯 Открыть игру',
+      web_app_url: miniAppUrl,
+      web_app_url_type: typeof miniAppUrl,
+      web_app_url_length: miniAppUrl?.length,
+      web_app_url_valid: miniAppUrl?.startsWith('http'),
+    });
+
+    // Send new message with webApp button
+    const result = await ctx.reply(
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
       `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -68,10 +83,10 @@ export async function startGame(ctx, deckId) {
       `Куда её поставить в цепочке?`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([buttons]),
+        ...markup,
       }
     );
-    console.log('[Play] Message edited successfully');
+    console.log('[Play] Message sent successfully:', { message_id: result.message_id });
   } catch (err) {
     console.error('[Play] Error:', {
       message: err.message,
@@ -80,16 +95,7 @@ export async function startGame(ctx, deckId) {
       status: err.response?.status,
       stack: err.stack,
     });
-    try {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        '❌ Не удалось создать игру. Попробуй ещё раз.'
-      );
-    } catch (editErr) {
-      console.error('[Play] Failed to edit error message:', editErr.message);
-    }
+    await ctx.reply('❌ Не удалось создать игру. Попробуй ещё раз.');
   }
 }
 
