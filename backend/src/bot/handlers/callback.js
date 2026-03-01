@@ -21,8 +21,6 @@ export async function handleCallback(ctx) {
     const chatId = ctx.callbackQuery.message?.chat?.id ?? null;
 
     try {
-      await ctx.answerCbQuery();
-
       const { sessionId, session } = await createSession({
         userId,
         deckId,
@@ -47,9 +45,10 @@ export async function handleCallback(ctx) {
           ]),
         }
       );
+      await ctx.answerCbQuery();
     } catch (err) {
-      console.error('[Callback] group_start error:', err.message);
-      await ctx.answerCbQuery('Ошибка при создании игры. Попробуй ещё раз.', { show_alert: true }).catch(() => {});
+      console.error('[Callback] group_start error:', err.message, err.stack);
+      await ctx.answerCbQuery(`Ошибка: ${err.message}`, { show_alert: true }).catch(() => {});
     }
     return;
   }
