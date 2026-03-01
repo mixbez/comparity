@@ -5,6 +5,7 @@ import { Markup } from 'telegraf';
 
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
+  console.log('[Callback] Received:', { data, userId: ctx.from.id, chatId: ctx.chat?.id });
 
   // Deck selection from /start or /decks
   if (data.startsWith('deck:') || data.startsWith('play:')) {
@@ -15,6 +16,7 @@ export async function handleCallback(ctx) {
 
   // Group game start (from inline message) — manages answerCbQuery itself
   if (data.startsWith('group_start:')) {
+    console.log('[Callback] Processing group_start');
     const deckId = parseInt(data.split(':')[1]);
     const userId = ctx.from.id;
     // For inline messages ctx.chat is null — get chatId from message if available
@@ -32,6 +34,14 @@ export async function handleCallback(ctx) {
       const nextCard = session.currentTurn?.card;
       const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
 
+      console.log('[Callback] group_start data:', {
+        sessionId,
+        deckName: session.deckName,
+        miniAppUrl,
+        buttonsCount: 2,
+        buttonTypes: ['url', 'callback'],
+      });
+
       await ctx.editMessageText(
         `🎮 *Групповая игра: ${session.deckName}*\n\n` +
         `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -46,8 +56,15 @@ export async function handleCallback(ctx) {
         }
       );
       await ctx.answerCbQuery();
+      console.log('[Callback] group_start success: message edited and callback answered');
     } catch (err) {
-      console.error('[Callback] group_start error:', err.message, err.stack);
+      console.error('[Callback] group_start error:', {
+        message: err.message,
+        code: err.code,
+        response: err.response?.body,
+        status: err.response?.status,
+        stack: err.stack,
+      });
       await ctx.answerCbQuery(`Ошибка: ${err.message}`, { show_alert: true }).catch(() => {});
     }
     return;
@@ -59,17 +76,21 @@ export async function handleCallback(ctx) {
   // Deck selection from /start or /decks
   if (data.startsWith('deck:') || data.startsWith('play:')) {
     const deckId = parseInt(data.split(':')[1]);
+    console.log('[Callback] Deck selection:', { deckId });
     return startGame(ctx, deckId);
   }
 
   // Challenge button
   if (data.startsWith('challenge:')) {
+    console.log('[Callback] Processing challenge');
     const sessionId = data.split(':')[1];
     const challengerId = ctx.from.id;
 
     try {
+      console.log('[Callback] Challenge data:', { sessionId, challengerId });
       await ctx.answerCbQuery();
       const result = await processChallenge({ sessionId, challengerId });
+      console.log('[Callback] Challenge resolved:', { bluffCaught: result.bluffCaught });
       const icon = result.bluffCaught ? '🎯' : '🛡';
       const msg = result.bluffCaught
         ? `${icon} Блеф пойман! Карта убрана из цепочки.`
@@ -80,8 +101,15 @@ export async function handleCallback(ctx) {
           .map(([uid, p]) => `\n  ID ${uid}: ${p.score} очков`)
           .join('')
       );
+      console.log('[Callback] Challenge reply sent successfully');
     } catch (err) {
-      await ctx.answerCbQuery(err.message, { show_alert: true }).catch(() => {});
+      console.error('[Callback] Challenge error:', {
+        message: err.message,
+        code: err.code,
+        response: err.response?.body,
+        status: err.response?.status,
+      });
+      await ctx.answerCbQuery(err.message, { show_alert: true });
     }
     return;
   }

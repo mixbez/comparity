@@ -22,9 +22,11 @@ export async function handlePlay(ctx) {
 
 export async function startGame(ctx, deckId) {
   const userId = ctx.from.id;
+  console.log('[Play] startGame called:', { userId, deckId });
   const loadingMsg = await ctx.reply('⏳ Создаём игру...');
 
   try {
+    console.log('[Play] Creating session...');
     const { sessionId, session } = await createSession({
       userId,
       deckId,
@@ -35,7 +37,14 @@ export async function startGame(ctx, deckId) {
     const nextCard = session.currentTurn?.card;
 
     const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
+    console.log('[Play] Session created:', {
+      sessionId,
+      deckName: session.deckName,
+      miniAppUrl,
+      buttonType: 'url',
+    });
 
+    console.log('[Play] Editing message with inline keyboard...');
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       loadingMsg.message_id,
@@ -50,17 +59,28 @@ export async function startGame(ctx, deckId) {
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
+          [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
         ]),
       }
     );
+    console.log('[Play] Message edited successfully');
   } catch (err) {
-    console.error('[Play] Error:', err.message);
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      null,
-      '❌ Не удалось создать игру. Попробуй ещё раз.'
-    );
+    console.error('[Play] Error:', {
+      message: err.message,
+      code: err.code,
+      response: err.response?.body,
+      status: err.response?.status,
+      stack: err.stack,
+    });
+    try {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        loadingMsg.message_id,
+        null,
+        '❌ Не удалось создать игру. Попробуй ещё раз.'
+      );
+    } catch (editErr) {
+      console.error('[Play] Failed to edit error message:', editErr.message);
+    }
   }
 }
