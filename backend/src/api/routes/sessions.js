@@ -1,7 +1,6 @@
 import { getSession } from '../../redis/session.js';
 import { redisSub } from '../../redis/client.js';
-import { createSession, processMove, processChallenge, GameError } from '../../game/session.js';
-import { getAllDecks } from '../../db/models/deck.js';
+import { createSession, processMove, processChallenge, joinSession, GameError } from '../../game/session.js';
 
 export async function sessionRoutes(fastify) {
   // POST /api/sessions — create new game session
@@ -13,9 +12,22 @@ export async function sessionRoutes(fastify) {
 
     try {
       const { sessionId, session } = await createSession({ userId, deckId });
-      return { sessionId, session };
+      return { sessionId, session: sanitizeSession(session, String(userId)) };
     } catch (err) {
       return reply.code(400).send({ error: err.message });
+    }
+  });
+
+  // POST /api/sessions/:id/join — join an existing game session
+  fastify.post('/:id/join', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+    const userId = parseInt(request.user.sub);
+
+    try {
+      const { session } = await joinSession({ sessionId: request.params.id, userId });
+      return { session: sanitizeSession(session, String(userId)) };
+    } catch (err) {
+      const status = err instanceof GameError ? err.statusCode : 500;
+      return reply.code(status).send({ error: err.message });
     }
   });
 
@@ -24,15 +36,13 @@ export async function sessionRoutes(fastify) {
     const session = await getSession(request.params.id);
     if (!session) return reply.code(404).send({ error: 'Session not found' });
 
-    // Don't expose hiddenValues of current turn card (the one being placed)
-    const safeSession = sanitizeSession(session, request.user.sub);
-    return safeSession;
+    return sanitizeSession(session, request.user.sub);
   });
 
-  // POST /api/sessions/:id/move — place card
+  // POST /api/sessions/:id/move — place card from hand into chain
   fastify.post('/:id/move', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     const userId = parseInt(request.user.sub);
-    const { cardId, position, isBluff = false } = request.body || {};
+    const { cardId, position } = request.body || {};
 
     if (cardId === undefined || position === undefined) {
       return reply.code(400).send({ error: 'cardId and position required' });
@@ -44,16 +54,19 @@ export async function sessionRoutes(fastify) {
         userId,
         cardId,
         position,
-        isBluff,
       });
-      return result;
+      return {
+        session: sanitizeSession(result.session, String(userId)),
+        gameOver: result.gameOver,
+        winners: result.winners,
+      };
     } catch (err) {
       const status = err instanceof GameError ? err.statusCode : 500;
       return reply.code(status).send({ error: err.message });
     }
   });
 
-  // POST /api/sessions/:id/challenge — challenge last bluff
+  // POST /api/sessions/:id/challenge — challenge the chain ("Не верю!")
   fastify.post('/:id/challenge', { onRequest: [fastify.authenticate] }, async (request, reply) => {
     const challengerId = parseInt(request.user.sub);
 
@@ -70,7 +83,6 @@ export async function sessionRoutes(fastify) {
   });
 
   // GET /api/sessions/:id/stream — SSE for real-time updates
-  // EventSource cannot set custom headers, so token is accepted via query param too
   fastify.get('/:id/stream', async (request, reply) => {
     const token = request.headers.authorization?.split(' ')[1] || request.query.token;
     if (!token) return reply.code(401).send({ error: 'Unauthorized' });
@@ -120,29 +132,50 @@ export async function sessionRoutes(fastify) {
 }
 
 /**
- * Remove sensitive data (hiddenValues) from the session for the client.
- * Show the currentTurn card without its hiddenValue.
+ * Remove sensitive data from session for client.
+ * - Face-down chain cards: no hiddenValue
+ * - Player's own hand: show cards but no hiddenValue/displayValue
+ * - Other players' hands: show count only
  */
 function sanitizeSession(session, userId) {
   const safe = { ...session };
+  const uid = String(userId);
 
-  // Mask hidden values of face-down chain cards
+  // Sanitize chain — hide values of face-down cards
   safe.chain = session.chain.map((card) =>
     card.isFaceDown
       ? { ...card, hiddenValue: null, displayValue: '?' }
       : card
   );
 
-  // Don't reveal hiddenValue of the card in hand
-  if (safe.currentTurn?.card) {
-    safe.currentTurn = {
-      ...safe.currentTurn,
-      card: {
-        ...safe.currentTurn.card,
-        hiddenValue: null, // client never needs to see this
-      },
-    };
+  // Sanitize players — only show own hand cards (without hidden values)
+  safe.players = {};
+  for (const [pid, player] of Object.entries(session.players)) {
+    if (pid === uid) {
+      safe.players[pid] = {
+        score: player.score,
+        turnOrder: player.turnOrder,
+        hand: (player.hand || []).map((c) => ({
+          cardId: c.cardId,
+          title: c.title,
+          subtitle: c.subtitle,
+          imageUrl: c.imageUrl,
+          flavorText: c.flavorText,
+        })),
+        handCount: player.hand?.length ?? 0,
+      };
+    } else {
+      safe.players[pid] = {
+        score: player.score,
+        turnOrder: player.turnOrder,
+        handCount: player.hand?.length ?? 0,
+      };
+    }
   }
+
+  // Remove internal fields
+  delete safe.allCardIds;
+  delete safe.usedCardIds;
 
   return safe;
 }

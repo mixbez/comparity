@@ -45,7 +45,8 @@ export async function startGame(ctx, deckId) {
     });
 
     const startingCard = session.chain[0];
-    const nextCard = session.currentTurn?.card;
+    const playerData = session.players[String(userId)];
+    const handCount = playerData?.hand?.length ?? 0;
     const botUsername = ctx.botInfo?.username;
     const miniAppUrl = buildMiniAppUrl(sessionId, isGroup, botUsername);
 
@@ -53,14 +54,18 @@ export async function startGame(ctx, deckId) {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      buttonType: isGroup ? 'url' : 'webApp',
+      handCount,
     });
 
-    // Use url button for groups (webApp buttons only work in private chats),
-    // webApp button for private chats (enables Telegram Mini App API)
+    // Use url button for groups, webApp button for private chats
     const button = isGroup
       ? Markup.button.url('🎯 Открыть игру', miniAppUrl)
       : Markup.button.webApp('🎯 Открыть игру', miniAppUrl);
+
+    // Join button for group games
+    const joinButton = isGroup
+      ? [Markup.button.callback('🤝 Присоединиться', `join:${sessionId}`)]
+      : [];
 
     // Delete loading message and send the game message
     await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
@@ -69,13 +74,16 @@ export async function startGame(ctx, deckId) {
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
       `📏 Параметр: *${session.deckParameterName}*\n\n` +
-      `🃏 Стартовая карточка:\n` +
+      `🃏 Стартовая карта:\n` +
       `*${startingCard.title}* — ${startingCard.displayValue}\n\n` +
-      `Твоя карточка: *${nextCard?.title || '?'}*\n` +
-      `Куда её поставить в цепочке?`,
+      `У тебя ${handCount} карт в руке.\n` +
+      `Угадай их место в цепочке по параметру *${session.deckParameterName}*!`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([[button]]),
+        ...Markup.inlineKeyboard([
+          [button],
+          ...(joinButton.length ? [joinButton] : []),
+        ]),
       }
     );
     console.log('[Play] Game message sent successfully');
@@ -94,12 +102,9 @@ export async function startGame(ctx, deckId) {
 function buildMiniAppUrl(sessionId, isGroup, botUsername) {
   const appShortName = process.env.MINI_APP_SHORT_NAME;
 
-  // For groups: use Telegram deep link so Mini App opens inside Telegram
-  // (not in external browser). Requires MINI_APP_SHORT_NAME from BotFather.
   if (isGroup && botUsername && appShortName) {
     return `https://t.me/${botUsername}/${appShortName}?startapp=${sessionId}`;
   }
 
-  // For private chats (webApp button) or fallback
   return `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
 }

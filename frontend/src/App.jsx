@@ -7,7 +7,10 @@ import ErrorScreen from './components/ui/ErrorScreen.jsx';
 
 export default function App() {
   const [authState, setAuthState] = useState('loading'); // loading | ok | error
-  const { sessionId, loadSession, updateSession, status } = useGameStore();
+  const {
+    sessionId, loadSession, updateSession, status,
+    handleChainUpdated, handleChallengeResult, handlePlayerJoined,
+  } = useGameStore();
 
   // Auth on mount
   useEffect(() => {
@@ -27,8 +30,19 @@ export default function App() {
   useEffect(() => {
     if (!sessionId || authState !== 'ok') return;
     const unsubscribe = subscribeToSession(sessionId, (event) => {
-      if (event.type === 'STATE' || event.type === 'CHAIN_UPDATED' || event.type === 'CHALLENGE_END') {
-        updateSession(event.payload);
+      switch (event.type) {
+        case 'STATE':
+          updateSession(event.payload);
+          break;
+        case 'CHAIN_UPDATED':
+          handleChainUpdated(event.payload);
+          break;
+        case 'CHALLENGE_RESULT':
+          handleChallengeResult(event.payload);
+          break;
+        case 'PLAYER_JOINED':
+          handlePlayerJoined(event.payload);
+          break;
       }
     });
     return unsubscribe;
