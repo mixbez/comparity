@@ -13,7 +13,7 @@ export async function handleCallback(ctx) {
     return startGame(ctx, deckId);
   }
 
-  // Group game start (from inline message)
+  // Group game start (from inline message) — manages answerCbQuery itself
   if (data.startsWith('group_start:')) {
     const deckId = parseInt(data.split(':')[1]);
     const userId = ctx.from.id;
@@ -51,6 +51,15 @@ export async function handleCallback(ctx) {
       await ctx.answerCbQuery(`Ошибка: ${err.message}`, { show_alert: true }).catch(() => {});
     }
     return;
+  }
+
+  // For all other callbacks answer immediately
+  await ctx.answerCbQuery();
+
+  // Deck selection from /start or /decks
+  if (data.startsWith('deck:') || data.startsWith('play:')) {
+    const deckId = parseInt(data.split(':')[1]);
+    return startGame(ctx, deckId);
   }
 
   // Challenge button
