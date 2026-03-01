@@ -49,8 +49,29 @@ export async function startGame(ctx, deckId) {
     // Delete loading message
     await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
 
+    // Build reply markup manually
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: '🎯 Открыть игру',
+            web_app: { url: miniAppUrl },
+          },
+        ],
+      ],
+    };
+
+    console.log('[Play] Reply markup structure:', JSON.stringify(replyMarkup, null, 2));
+    console.log('[Play] Button details:', {
+      text: '🎯 Открыть игру',
+      web_app_url: miniAppUrl,
+      web_app_url_type: typeof miniAppUrl,
+      web_app_url_length: miniAppUrl?.length,
+      web_app_url_valid: miniAppUrl?.startsWith('http'),
+    });
+
     // Send new message with webApp button (manual button creation)
-    await ctx.reply(
+    const result = await ctx.reply(
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
       `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -60,19 +81,10 @@ export async function startGame(ctx, deckId) {
       `Куда её поставить в цепочке?`,
       {
         parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: '🎯 Открыть игру',
-                web_app: { url: miniAppUrl },
-              },
-            ],
-          ],
-        },
+        reply_markup: replyMarkup,
       }
     );
-    console.log('[Play] Message sent successfully');
+    console.log('[Play] Message sent successfully:', { message_id: result.message_id });
   } catch (err) {
     console.error('[Play] Error:', {
       message: err.message,
