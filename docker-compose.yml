@@ -1,14 +1,16 @@
 services:
   traefik:
-    image: traefik:v3.0
+    image: traefik:v2.11
     restart: unless-stopped
+    environment:
+      - DOCKER_API_VERSION=1.41
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
       - --certificatesresolvers.le.acme.httpchallenge=true
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.le.acme.email=admin@comparity.app
