@@ -1,9 +1,14 @@
-import { startGame } from './play.js';
+import { startGame, handleGroupStart } from './play.js';
 import { processChallenge } from '../../game/session.js';
 
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
   console.log('[Callback] Received:', { data, userId: ctx.from.id, chatId: ctx.chat?.id });
+
+  // Group game start from inline query
+  if (data.startsWith('group_start:')) {
+    return handleGroupStart(ctx);
+  }
 
   // Deck selection from /start or /decks
   if (data.startsWith('deck:') || data.startsWith('play:')) {
