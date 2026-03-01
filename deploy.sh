@@ -1,131 +1,71 @@
 #!/bin/bash
 # =============================================================================
-# Comparity — Deploy Script
-# Запускать на сервере: bash deploy.sh
+# Comparity — Auto Deploy (Traefik + Let's Encrypt SSL)
 # =============================================================================
-
 set -e
 
-echo "=== Comparity Deploy ==="
+BOT_TOKEN="8648841232:AAHsMJVRAExWZBdXvs37Y2tMYW79KQLZi_s"
+DOMAIN="v2202504269079335176.supersrv.de"
+BOT_WEBHOOK_URL="https://${DOMAIN}"
+MINI_APP_URL="https://${DOMAIN}"
+JWT_SECRET="$(openssl rand -hex 32)"
 
-# --------------------------------------------------------------------------
-# НАСТРОЙКИ — ЗАПОЛНИ ЭТИ ЗНАЧЕНИЯ
-# --------------------------------------------------------------------------
-BOT_TOKEN="ТВОЙ_BOT_TOKEN_СЮДА"
-BOT_WEBHOOK_URL="https://89.58.41.214"   # или твой домен, напр. https://comparity.com
-MINI_APP_URL="https://89.58.41.214"      # URL фронтенда (тот же хост)
-JWT_SECRET="$(openssl rand -hex 32)"     # генерируется автоматически
-# --------------------------------------------------------------------------
-
-REPO_URL="https://github.com/mixbez/comparity"
+REPO="https://github.com/mixbez/comparity"
+BRANCH="claude/telegram-game-mvp-W3VmP"
 APP_DIR="/opt/comparity"
 
-# 1. Установка зависимостей
-echo "[1/6] Установка Docker..."
+echo "========================================="
+echo "  Comparity Deploy — $(date)"
+echo "========================================="
+
+# 1. Docker
+echo "[1/4] Installing Docker..."
 if ! command -v docker &>/dev/null; then
   curl -fsSL https://get.docker.com | sh
-  systemctl enable docker
-  systemctl start docker
+  systemctl enable --now docker
 fi
 
-if ! command -v docker-compose &>/dev/null && ! docker compose version &>/dev/null 2>&1; then
-  apt-get install -y docker-compose-plugin || apt-get install -y docker-compose
+# docker compose plugin (v2)
+if ! docker compose version &>/dev/null 2>&1; then
+  apt-get install -y docker-compose-plugin 2>/dev/null || \
+    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+      -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
 fi
 
-echo "[2/6] Установка git, nginx, certbot..."
-apt-get update -qq
-apt-get install -y git nginx certbot python3-certbot-nginx openssl
-
-# 2. Клонирование репозитория
-echo "[3/6] Клонирование репозитория..."
-if [ -d "$APP_DIR" ]; then
-  cd "$APP_DIR"
-  git fetch origin
-  git checkout claude/telegram-game-mvp-W3VmP
-  git pull origin claude/telegram-game-mvp-W3VmP
+# 2. Clone / pull
+echo "[2/4] Getting app source..."
+apt-get install -y git openssl 2>/dev/null || true
+if [ -d "$APP_DIR/.git" ]; then
+  git -C "$APP_DIR" fetch origin "$BRANCH"
+  git -C "$APP_DIR" checkout "$BRANCH"
+  git -C "$APP_DIR" pull origin "$BRANCH"
 else
-  git clone -b claude/telegram-game-mvp-W3VmP "$REPO_URL" "$APP_DIR"
-  cd "$APP_DIR"
+  git clone -b "$BRANCH" "$REPO" "$APP_DIR"
 fi
 
-# 3. Создание .env файла
-echo "[4/6] Создание .env..."
+# 3. .env
+echo "[3/4] Writing .env..."
 cat > "$APP_DIR/.env" <<EOF
 BOT_TOKEN=${BOT_TOKEN}
 BOT_WEBHOOK_URL=${BOT_WEBHOOK_URL}
 MINI_APP_URL=${MINI_APP_URL}
 JWT_SECRET=${JWT_SECRET}
+DOMAIN=${DOMAIN}
 EOF
 
-echo "JWT_SECRET сохранён: ${JWT_SECRET}"
-
-# 4. Настройка nginx как reverse proxy с SSL termination
-echo "[5/6] Настройка nginx..."
-cat > /etc/nginx/sites-available/comparity <<'NGINX'
-server {
-    listen 80;
-    server_name _;
-
-    # Webhook и API
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        # SSE поддержка
-        proxy_set_header Connection '';
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 3600s;
-    }
-
-    location /webhook {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    # Фронтенд
-    location / {
-        proxy_pass http://127.0.0.1:5173;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-    }
-}
-NGINX
-
-ln -sf /etc/nginx/sites-available/comparity /etc/nginx/sites-enabled/comparity
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
-
-# 5. Запуск через Docker Compose
-echo "[6/6] Запуск контейнеров..."
+# 4. Run
+echo "[4/4] Starting containers..."
 cd "$APP_DIR"
-
-# Остановить старые контейнеры если есть
-docker compose down 2>/dev/null || docker-compose down 2>/dev/null || true
-
-# Билд и запуск
-docker compose up -d --build 2>/dev/null || docker-compose up -d --build
+docker compose down --remove-orphans 2>/dev/null || true
+docker compose up -d --build
 
 echo ""
-echo "=== Деплой завершён! ==="
-echo ""
-echo "Статус контейнеров:"
-docker compose ps 2>/dev/null || docker-compose ps
+echo "========================================="
+echo "  Done! Waiting for services to start..."
+echo "========================================="
+sleep 10
+docker compose ps
 
 echo ""
-echo "Логи бэкенда (последние 30 строк):"
-sleep 5
-docker compose logs --tail=30 backend 2>/dev/null || docker-compose logs --tail=30 backend
-
-echo ""
-echo "Приложение доступно:"
-echo "  Фронтенд: ${MINI_APP_URL}"
-echo "  API:      ${BOT_WEBHOOK_URL}/api"
-echo "  Webhook:  ${BOT_WEBHOOK_URL}/webhook"
+echo "App: https://${DOMAIN}"
+echo "API: https://${DOMAIN}/api/decks"
