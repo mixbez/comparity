@@ -44,11 +44,13 @@ export async function startGame(ctx, deckId) {
       buttonType: 'webApp',
     });
 
-    console.log('[Play] Editing message with inline keyboard...');
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      null,
+    console.log('[Play] Sending game message with webApp button...');
+
+    // Delete loading message
+    await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
+
+    // Send new message with webApp button
+    await ctx.reply(
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
       `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -63,7 +65,7 @@ export async function startGame(ctx, deckId) {
         ]),
       }
     );
-    console.log('[Play] Message edited successfully');
+    console.log('[Play] Message sent successfully');
   } catch (err) {
     console.error('[Play] Error:', {
       message: err.message,
