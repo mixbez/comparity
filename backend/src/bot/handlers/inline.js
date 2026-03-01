@@ -19,7 +19,6 @@ export async function handleInlineQuery(ctx) {
       inline_keyboard: [
         [
           {
-            type: 'callback_query',
             text: '🎯 Начать групповую игру',
             callback_data: `group_start:${deck.id}`,
           },
