@@ -41,7 +41,7 @@ export async function startGame(ctx, deckId) {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      buttonType: 'url',
+      buttonType: 'webApp',
     });
 
     console.log('[Play] Editing message with inline keyboard...');
@@ -59,7 +59,7 @@ export async function startGame(ctx, deckId) {
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
-          [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
+          [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
         ]),
       }
     );
