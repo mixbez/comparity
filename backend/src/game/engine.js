@@ -74,7 +74,7 @@ function findRevealedNeighbor(chain, startIdx, direction) {
  */
 export function insertCard(chain, card, position, isFaceDown, placedBy) {
   const newEntry = {
-    cardId: card.id,
+    cardId: card.id ?? card.cardId,
     title: card.title,
     subtitle: card.subtitle || null,
     imageUrl: card.imageUrl || card.image_url,

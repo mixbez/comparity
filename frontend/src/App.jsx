@@ -26,7 +26,7 @@ export default function App() {
   useEffect(() => {
     if (!sessionId || authState !== 'ok') return;
     const unsubscribe = subscribeToSession(sessionId, (event) => {
-      if (event.type === 'CHAIN_UPDATED' || event.type === 'CHALLENGE_END') {
+      if (event.type === 'STATE' || event.type === 'CHAIN_UPDATED' || event.type === 'CHALLENGE_END') {
         updateSession(event.payload);
       }
     });

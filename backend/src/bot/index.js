@@ -3,6 +3,7 @@ import { handleStart } from './handlers/start.js';
 import { handlePlay } from './handlers/play.js';
 import { handleStats } from './handlers/stats.js';
 import { handleDecks } from './handlers/decks.js';
+import { handleStop } from './handlers/stop.js';
 import { handleInlineQuery } from './handlers/inline.js';
 import { handleCallback } from './handlers/callback.js';
 import { upsertUser } from '../db/models/user.js';
@@ -29,10 +30,12 @@ export function createBot() {
   bot.command('play', handlePlay);
   bot.command('stats', handleStats);
   bot.command('decks', handleDecks);
+  bot.command('stop', handleStop);
   bot.command('help', (ctx) =>
     ctx.reply(
       '📖 *Comparity* — игра в сравнение!\n\n' +
       '/play — начать новую игру\n' +
+      '/stop — завершить текущую игру\n' +
       '/decks — выбрать колоду\n' +
       '/stats — твоя статистика\n',
       { parse_mode: 'Markdown' }

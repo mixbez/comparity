@@ -1,26 +1,17 @@
 services:
-  traefik:
-    image: traefik:v2.11
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
-    environment:
-      - DOCKER_API_VERSION=1.41
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.web.http.redirections.entryPoint.to=websecure
-      - --entrypoints.web.http.redirections.entryPoint.scheme=https
-      - --certificatesresolvers.le.acme.httpchallenge=true
-      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.le.acme.email=admin@comparity.app
-      - --certificatesresolvers.le.acme.storage=/acme/acme.json
     ports:
       - '80:80'
       - '443:443'
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik_acme:/acme
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
 
   postgres:
     image: postgres:16-alpine
@@ -68,15 +59,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/webhook`))
-      - traefik.http.routers.backend.entrypoints=websecure
-      - traefik.http.routers.backend.tls.certresolver=le
-      - traefik.http.services.backend.loadbalancer.server.port=3000
-      # SSE: disable buffering
-      - traefik.http.middlewares.sse.headers.customrequestheaders.X-Accel-Buffering=no
-      - traefik.http.routers.backend.middlewares=sse
 
   frontend:
     build:
@@ -87,14 +69,9 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.frontend.entrypoints=websecure
-      - traefik.http.routers.frontend.tls.certresolver=le
-      - traefik.http.services.frontend.loadbalancer.server.port=80
 
 volumes:
   pg_data:
   redis_data:
-  traefik_acme:
+  caddy_data:
+  caddy_config:
