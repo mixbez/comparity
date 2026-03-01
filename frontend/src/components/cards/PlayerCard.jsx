@@ -116,6 +116,7 @@ export default function PlayerCard() {
           {/* Bluff toggle — only in multiplayer */}
           {session?.type !== 'SOLO' && (
             <button
+              type="button"
               onClick={toggleBluffMode}
               className={`
                 w-full py-2.5 px-3 rounded-xl text-sm font-medium transition-all
@@ -130,6 +131,7 @@ export default function PlayerCard() {
 
           {/* Confirm placement */}
           <button
+            type="button"
             onClick={confirmMove}
             disabled={pendingPosition === null || status === 'loading'}
             className={`

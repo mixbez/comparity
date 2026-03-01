@@ -53,12 +53,14 @@ export default function GameOverScreen({ session }) {
       {/* Actions */}
       <div className="w-full max-w-xs space-y-3">
         <button
+          type="button"
           onClick={handleShare}
           className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-semibold text-sm active:scale-95 transition-transform"
         >
           📢 Позвать друзей
         </button>
         <button
+          type="button"
           onClick={handlePlayAgain}
           className="w-full py-3 rounded-2xl border border-gray-200 text-tg-text text-sm active:scale-95 transition-transform"
         >

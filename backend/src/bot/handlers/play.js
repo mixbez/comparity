@@ -20,9 +20,17 @@ export async function handlePlay(ctx) {
   });
 }
 
-export async function startGame(ctx, deckId) {
+export async function handleGroupStart(ctx) {
+  const data = ctx.callbackQuery.data;
+  const deckId = parseInt(data.split(':')[1]);
+  await ctx.answerCbQuery();
+  await startGame(ctx, deckId, 'GROUP');
+}
+
+export async function startGame(ctx, deckId, gameType = 'SOLO') {
   const userId = ctx.from.id;
-  console.log('[Play] startGame called:', { userId, deckId });
+  const chatId = ctx.chat?.id;
+  console.log('[Play] startGame called:', { userId, deckId, gameType, chatId });
   const loadingMsg = await ctx.reply('⏳ Создаём игру...');
 
   try {
@@ -30,7 +38,8 @@ export async function startGame(ctx, deckId) {
     const { sessionId, session } = await createSession({
       userId,
       deckId,
-      type: 'SOLO',
+      type: gameType,
+      chatId,
     });
 
     const startingCard = session.chain[0];
@@ -41,14 +50,30 @@ export async function startGame(ctx, deckId) {
       sessionId,
       deckName: session.deckName,
       miniAppUrl,
-      buttonType: 'url',
+      miniAppUrlType: typeof miniAppUrl,
     });
 
-    console.log('[Play] Editing message with inline keyboard...');
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      null,
+    console.log('[Play] Sending game message with webApp button...');
+
+    // Delete loading message
+    await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => {});
+
+    // Build reply markup using Markup helper
+    const markup = Markup.inlineKeyboard([
+      [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
+    ]);
+
+    console.log('[Play] Markup structure:', JSON.stringify(markup, null, 2));
+    console.log('[Play] Button details:', {
+      text: '🎯 Открыть игру',
+      web_app_url: miniAppUrl,
+      web_app_url_type: typeof miniAppUrl,
+      web_app_url_length: miniAppUrl?.length,
+      web_app_url_valid: miniAppUrl?.startsWith('http'),
+    });
+
+    // Send new message with webApp button
+    const result = await ctx.reply(
       `🎮 *Игра началась!*\n\n` +
       `📦 Колода: *${session.deckName}*\n` +
       `📏 Параметр: *${session.deckParameterName}*\n\n` +
@@ -58,12 +83,10 @@ export async function startGame(ctx, deckId) {
       `Куда её поставить в цепочке?`,
       {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
-        ]),
+        ...markup,
       }
     );
-    console.log('[Play] Message edited successfully');
+    console.log('[Play] Message sent successfully:', { message_id: result.message_id });
   } catch (err) {
     console.error('[Play] Error:', {
       message: err.message,
@@ -72,15 +95,6 @@ export async function startGame(ctx, deckId) {
       status: err.response?.status,
       stack: err.stack,
     });
-    try {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        '❌ Не удалось создать игру. Попробуй ещё раз.'
-      );
-    } catch (editErr) {
-      console.error('[Play] Failed to edit error message:', editErr.message);
-    }
+    await ctx.reply('❌ Не удалось создать игру. Попробуй ещё раз.');
   }
 }
