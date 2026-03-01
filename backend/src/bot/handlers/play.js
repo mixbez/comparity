@@ -46,7 +46,8 @@ export async function startGame(ctx, deckId) {
 
     const startingCard = session.chain[0];
     const nextCard = session.currentTurn?.card;
-    const miniAppUrl = buildMiniAppUrl(sessionId, isGroup);
+    const botUsername = ctx.botInfo?.username;
+    const miniAppUrl = buildMiniAppUrl(sessionId, isGroup, botUsername);
 
     console.log('[Play] Session created:', {
       sessionId,
@@ -90,12 +91,15 @@ export async function startGame(ctx, deckId) {
   }
 }
 
-function buildMiniAppUrl(sessionId, isGroup) {
-  const baseUrl = process.env.MINI_APP_URL;
+function buildMiniAppUrl(sessionId, isGroup, botUsername) {
+  const appShortName = process.env.MINI_APP_SHORT_NAME;
 
-  if (isGroup && process.env.BOT_USERNAME && process.env.MINI_APP_SHORT_NAME) {
-    return `https://t.me/${process.env.BOT_USERNAME}/${process.env.MINI_APP_SHORT_NAME}?startapp=${sessionId}`;
+  // For groups: use Telegram deep link so Mini App opens inside Telegram
+  // (not in external browser). Requires MINI_APP_SHORT_NAME from BotFather.
+  if (isGroup && botUsername && appShortName) {
+    return `https://t.me/${botUsername}/${appShortName}?startapp=${sessionId}`;
   }
 
-  return `${baseUrl}?sessionId=${sessionId}`;
+  // For private chats (webApp button) or fallback
+  return `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
 }

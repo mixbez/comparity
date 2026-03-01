@@ -14,9 +14,10 @@ export default function App() {
     authenticate()
       .then(() => {
         setAuthState('ok');
-        // Get sessionId from URL params (passed by bot)
+        // Get sessionId: from URL param (webApp button) or start_param (deep link in groups)
         const params = new URLSearchParams(window.location.search);
-        const sid = params.get('sessionId');
+        const sid = params.get('sessionId')
+          || window.Telegram?.WebApp?.initDataUnsafe?.start_param;
         if (sid) loadSession(sid);
       })
       .catch(() => setAuthState('error'));
