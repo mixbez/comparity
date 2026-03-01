@@ -50,7 +50,7 @@ export async function handleCallback(ctx) {
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
-            [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
+            [Markup.button.url('🎯 Открыть игру', miniAppUrl)],
             [Markup.button.callback('⚔️ Оспорить!', `challenge:${sessionId}`)],
           ]),
         }
