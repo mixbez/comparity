@@ -43,7 +43,10 @@ export async function handleCallback(ctx) {
       });
 
       // Send new message with webApp button (inline messages don't support webApp)
-      await ctx.reply(
+      // Use sendMessage instead of reply because callback queries don't support reply()
+      const sendChatId = chatId || ctx.from.id; // Use chat ID if from group, else DM the user
+      await ctx.telegram.sendMessage(
+        sendChatId,
         `🎮 *Групповая игра: ${session.deckName}*\n\n` +
         `📏 Параметр: *${session.deckParameterName}*\n\n` +
         `🃏 Цепочка начата с: *${startingCard.title}* (${startingCard.displayValue})\n\n` +
