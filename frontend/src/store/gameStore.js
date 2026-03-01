@@ -8,12 +8,11 @@ export const useGameStore = create((set, get) => ({
   status: 'idle', // idle | loading | playing | finished | error
 
   // UI state
+  selectedCardId: null,   // card selected from hand
   draggedCard: null,
   pendingPosition: null,
-  lastResult: null, // { type: 'correct'|'incorrect'|'bluff_caught'|'bluff_held', delta }
-  challengeTimeLeft: null,
-  showBluffToggle: false,
-  isBluffMode: false,
+  lastResult: null,       // { type: 'card_placed'|'chain_valid'|'chain_invalid'|'error' }
+  challengeResult: null,  // { chainValid, revealedChain, invalidPositions, penaltyPlayer }
 
   // ── Actions ─────────────────────────────────────────────────────────
 
@@ -21,50 +20,98 @@ export const useGameStore = create((set, get) => ({
     set({ status: 'loading', sessionId });
     try {
       const session = await api.getSession(sessionId);
-      set({ session, status: 'playing' });
+      set({ session, status: session.status === 'FINISHED' ? 'finished' : 'playing' });
     } catch (err) {
       set({ status: 'error' });
     }
   },
 
   /**
-   * Update session from an SSE event or full session replacement.
-   * If data looks like a full session (has 'id'), replace entirely.
-   * Otherwise merge the event payload fields into the existing session.
+   * Full session replacement from STATE SSE event.
    */
   updateSession: (data) => {
+    set({
+      session: data,
+      status: data.status === 'FINISHED' ? 'finished' : 'playing',
+    });
+  },
+
+  /**
+   * Handle CHAIN_UPDATED SSE event.
+   */
+  handleChainUpdated: (payload) => {
     set((s) => {
-      // Full session replacement (STATE event or initial load)
-      if ('id' in data && 'deckId' in data) {
-        return {
-          session: data,
-          status: data.status === 'FINISHED' ? 'finished' : 'playing',
-        };
-      }
-
-      // Partial event payload — merge into existing session
       const session = s.session;
-      if (!session) return { session: data };
-
-      const merged = {
-        ...session,
-        ...(data.chain !== undefined && { chain: data.chain }),
-        ...(data.players !== undefined && { players: data.players }),
-        // currentTurn: explicit null means no next card; undefined means keep current
-        ...('currentTurn' in data && { currentTurn: data.currentTurn }),
-        ...(data.gameOver && { status: 'FINISHED' }),
-      };
+      if (!session) return {};
 
       return {
-        session: merged,
-        status: data.gameOver ? 'finished' : (s.status === 'loading' ? 'playing' : s.status),
-        ...(data.turnResult && {
-          lastResult: {
-            type: data.turnResult.status?.toLowerCase(),
-            delta: data.turnResult.scoreDelta,
-          },
-        }),
+        session: {
+          ...session,
+          chain: payload.chain,
+          currentPlayerIndex: payload.currentPlayerIndex,
+          lastMoveBy: payload.lastMoveBy,
+          players: mergePlayersInfo(session.players, payload.playersInfo),
+          status: payload.gameOver ? 'FINISHED' : session.status,
+        },
+        status: payload.gameOver ? 'finished' : s.status,
+        selectedCardId: null,
+        pendingPosition: null,
       };
+    });
+  },
+
+  /**
+   * Handle CHALLENGE_RESULT SSE event — show revealed chain, then transition.
+   */
+  handleChallengeResult: (payload) => {
+    set({
+      challengeResult: {
+        chainValid: payload.chainValid,
+        revealedChain: payload.revealedChain,
+        invalidPositions: payload.invalidPositions,
+        penaltyPlayer: payload.penaltyPlayer,
+        reason: payload.reason,
+      },
+    });
+
+    // After showing revealed chain for 3 seconds, update to new state
+    setTimeout(() => {
+      set((s) => {
+        const session = s.session;
+        if (!session) return {};
+
+        return {
+          session: {
+            ...session,
+            chain: payload.newChain,
+            currentPlayerIndex: payload.currentPlayerIndex,
+            lastMoveBy: null,
+            players: mergePlayersInfo(session.players, payload.playersInfo),
+            status: payload.gameOver ? 'FINISHED' : session.status,
+          },
+          status: payload.gameOver ? 'finished' : s.status,
+          challengeResult: null,
+          selectedCardId: null,
+          pendingPosition: null,
+        };
+      });
+    }, 3000);
+  },
+
+  /**
+   * Handle PLAYER_JOINED — reload session to get updated player list.
+   */
+  handlePlayerJoined: () => {
+    const { sessionId } = get();
+    if (sessionId) get().loadSession(sessionId);
+  },
+
+  selectCard: (cardId) => {
+    const { selectedCardId } = get();
+    // Toggle selection
+    set({
+      selectedCardId: selectedCardId === cardId ? null : cardId,
+      pendingPosition: null,
     });
   },
 
@@ -72,22 +119,19 @@ export const useGameStore = create((set, get) => ({
 
   setPendingPosition: (position) => set({ pendingPosition: position }),
 
-  toggleBluffMode: () => set((s) => ({ isBluffMode: !s.isBluffMode })),
-
   confirmMove: async () => {
-    const { sessionId, session, pendingPosition, isBluffMode } = get();
-    const card = session?.currentTurn?.card;
-    if (!card || pendingPosition === null) return;
+    const { sessionId, selectedCardId, pendingPosition } = get();
+    if (!selectedCardId || pendingPosition === null) return;
 
     set({ status: 'loading' });
     try {
-      const result = await api.makeMove(sessionId, card.cardId, pendingPosition, isBluffMode);
-      const resultType = isBluffMode ? 'bluff_placed' : result.turnStatus.toLowerCase();
+      const result = await api.makeMove(sessionId, selectedCardId, pendingPosition);
       set({
         session: result.session,
-        lastResult: { type: resultType, delta: result.scoreDelta },
+        lastResult: { type: 'card_placed' },
         pendingPosition: null,
-        isBluffMode: false,
+        selectedCardId: null,
+        draggedCard: null,
         status: result.session.status === 'FINISHED' ? 'finished' : 'playing',
       });
     } catch (err) {
@@ -99,21 +143,31 @@ export const useGameStore = create((set, get) => ({
     const { sessionId } = get();
     set({ status: 'loading' });
     try {
-      const result = await api.challenge(sessionId);
-      set({
-        session: { ...get().session, chain: result.newChain, players: result.players },
-        lastResult: {
-          type: result.bluffCaught ? 'bluff_caught' : 'bluff_held',
-          delta: result.bluffCaught ? 2 : -1,
-        },
-        status: 'playing',
-      });
-    } catch (err) {
+      await api.challenge(sessionId);
+      // SSE CHALLENGE_RESULT event will handle the UI update
       set({ status: 'playing' });
+    } catch (err) {
+      set({ status: 'playing', lastResult: { type: 'error', message: err.message } });
     }
   },
 
   clearResult: () => set({ lastResult: null }),
-
-  setChallengeTimeLeft: (ms) => set({ challengeTimeLeft: ms }),
+  clearChallengeResult: () => set({ challengeResult: null }),
 }));
+
+/**
+ * Merge server playersInfo (handCount, score) into current players state.
+ * Preserves hand cards for own player.
+ */
+function mergePlayersInfo(currentPlayers, playersInfo) {
+  if (!playersInfo) return currentPlayers;
+  const merged = { ...currentPlayers };
+  for (const [uid, info] of Object.entries(playersInfo)) {
+    merged[uid] = {
+      ...merged[uid],
+      score: info.score,
+      handCount: info.handCount,
+    };
+  }
+  return merged;
+}

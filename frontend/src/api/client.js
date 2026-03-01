@@ -47,8 +47,9 @@ async function request(method, path, body) {
 export const api = {
   getSession: (id) => request('GET', `/sessions/${id}`),
   createSession: (deckId) => request('POST', '/sessions', { deckId }),
-  makeMove: (sessionId, cardId, position, isBluff) =>
-    request('POST', `/sessions/${sessionId}/move`, { cardId, position, isBluff }),
+  joinSession: (sessionId) => request('POST', `/sessions/${sessionId}/join`),
+  makeMove: (sessionId, cardId, position) =>
+    request('POST', `/sessions/${sessionId}/move`, { cardId, position }),
   challenge: (sessionId) => request('POST', `/sessions/${sessionId}/challenge`),
   getDecks: () => request('GET', '/decks'),
   getLeaderboard: (deckId) => request('GET', `/leaderboard${deckId ? `?deckId=${deckId}` : ''}`),

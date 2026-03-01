@@ -1,64 +1,59 @@
 /**
  * Comparity Game Engine — Pure Functions
- * All functions are side-effect free and easily testable.
+ *
+ * New rules (MVP Digital Adapt):
+ * - Players get a hand of cards (hidden values unknown to them)
+ * - One anchor card placed face-up on the table
+ * - Players take turns placing cards face-down into the chain
+ * - Next player can either place their card or challenge ("Не верю!")
+ * - Challenge reveals entire chain; if order broken, last wrong player gets penalty
+ * - Penalty = draw extra cards from deck
+ * - Win = first to empty hand (or fewest cards when deck exhausted)
  *
  * Chain structure:
- *   chain = [ { cardId, title, hiddenValue, displayValue, isFaceDown, placedBy }, ... ]
- *   Sorted ascending by hiddenValue (left = smallest, right = largest)
+ *   chain = [ { cardId, title, hiddenValue, displayValue, isFaceDown, placedBy, turnNumber }, ... ]
+ *   Should be ascending by hiddenValue (left = smallest, right = largest)
  *
  * Position: 0-indexed insertion index.
  *   chain = [A, B, C]  positions: 0=before A, 1=between A&B, 2=between B&C, 3=after C
  */
 
+export const PENALTY_CARDS = 2;
+export const DEFAULT_HAND_SIZE = 5;
+
 export const SCORE = {
-  CORRECT_MOVE: 1,
-  BLUFF_HELD: 2,         // bluff survived challenge
-  BLUFF_CAUGHT: -1,      // placer loses when bluff is caught
-  CHALLENGE_WIN: 2,      // challenger wins
-  CHALLENGE_LOSE: -1,    // challenger loses when bluff held
+  CHALLENGE_WIN: 2,    // successfully caught invalid chain
+  CHALLENGE_LOSE: -1,  // wrongly challenged valid chain
+  PENALTY: -1,         // placed card that broke the chain
+  GAME_WIN: 10,        // won the game
 };
 
 /**
- * Validate whether placing `card` at `position` is correct given `chain`.
- * Ignores face-down cards (they don't constrain neighbors).
- *
- * @param {Array} chain - current chain (all cards including face-down)
- * @param {{ hiddenValue: number }} card - card being placed
- * @param {number} position - insertion index (0 to chain.length)
- * @returns {{ valid: boolean, reason?: string }}
+ * Draw N random cards from available deck cards.
+ * @param {Array<Object>} deckCards - all cards in deck (with .id)
+ * @param {Set<number>} usedCardIds
+ * @param {number} count
+ * @returns {{ drawn: Array<Object>, newUsedIds: Set<number> }}
  */
-export function validateMove(chain, card, position) {
-  if (position < 0 || position > chain.length) {
-    return { valid: false, reason: 'position_out_of_bounds' };
-  }
-
-  const leftCard = findRevealedNeighbor(chain, position - 1, -1);
-  const rightCard = findRevealedNeighbor(chain, position, 1);
-
-  if (leftCard && card.hiddenValue < leftCard.hiddenValue) {
-    return { valid: false, reason: 'less_than_left' };
-  }
-  if (rightCard && card.hiddenValue > rightCard.hiddenValue) {
-    return { valid: false, reason: 'greater_than_right' };
-  }
-
-  return { valid: true };
+export function drawCards(deckCards, usedCardIds, count) {
+  const available = deckCards.filter((c) => !usedCardIds.has(c.id));
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  const drawn = shuffled.slice(0, Math.min(count, shuffled.length));
+  const newUsedIds = new Set(usedCardIds);
+  drawn.forEach((c) => newUsedIds.add(c.id));
+  return { drawn, newUsedIds };
 }
 
 /**
- * Find the nearest revealed (non-face-down) card in a direction.
- * @param {Array} chain
- * @param {number} startIdx - inclusive start
- * @param {number} direction - -1 (left) or +1 (right)
+ * Draw a single random card. Returns card or null.
+ * @param {Array<Object>} deckCards
+ * @param {Set<number>} usedCardIds
  * @returns {Object|null}
  */
-function findRevealedNeighbor(chain, startIdx, direction) {
-  let i = startIdx;
-  while (i >= 0 && i < chain.length) {
-    if (!chain[i].isFaceDown) return chain[i];
-    i += direction;
-  }
-  return null;
+export function drawCard(deckCards, usedCardIds) {
+  const available = deckCards.filter((c) => !usedCardIds.has(c.id));
+  if (!available.length) return null;
+  return available[Math.floor(Math.random() * available.length)];
 }
 
 /**
@@ -66,22 +61,24 @@ function findRevealedNeighbor(chain, startIdx, direction) {
  * Returns a new chain array (immutable).
  *
  * @param {Array} chain
- * @param {Object} card
- * @param {number} position
+ * @param {Object} card - must have hiddenValue/hidden_value, title, etc.
+ * @param {number} position - insertion index (0 to chain.length)
  * @param {boolean} isFaceDown
- * @param {number|string} placedBy - userId
+ * @param {string|null} placedBy - userId
+ * @param {number} turnNumber
  * @returns {Array}
  */
-export function insertCard(chain, card, position, isFaceDown, placedBy) {
+export function insertCard(chain, card, position, isFaceDown, placedBy, turnNumber) {
   const newEntry = {
     cardId: card.id ?? card.cardId,
     title: card.title,
     subtitle: card.subtitle || null,
-    imageUrl: card.imageUrl || card.image_url,
+    imageUrl: card.imageUrl || card.image_url || null,
     hiddenValue: parseFloat(card.hiddenValue ?? card.hidden_value),
     displayValue: card.displayValue ?? card.display_value,
     isFaceDown,
-    placedBy,
+    placedBy: placedBy != null ? String(placedBy) : null,
+    turnNumber: turnNumber ?? 0,
   };
 
   const newChain = [...chain];
@@ -99,65 +96,98 @@ export function removeCard(chain, position) {
 }
 
 /**
- * Reveal a face-down card at position (challenge was won / bluff held).
- * Returns new chain.
+ * Reveal all cards in the chain (flip face-up).
+ * @param {Array} chain
+ * @returns {Array}
  */
-export function revealCard(chain, position) {
-  return chain.map((card, i) =>
-    i === position ? { ...card, isFaceDown: false } : card
-  );
+export function revealChain(chain) {
+  return chain.map((card) => ({ ...card, isFaceDown: false }));
 }
 
 /**
- * Resolve a challenge against the last placed bluff card.
+ * Validate whether the entire chain is in ascending order by hiddenValue.
+ * Returns validity info and identifies the player who made the last wrong move.
  *
- * @param {Array} chain - current chain
- * @param {number} position - position of challenged card in chain
- * @param {Object} card - the face-down card being challenged (with hiddenValue)
- * @param {number|string} placerId - userId of person who placed card
- * @param {number|string} challengerId - userId of challenger
+ * @param {Array} chain - chain with all hiddenValues available
+ * @returns {{ valid: boolean, invalidPositions: number[], lastWrongPlayer: string|null }}
+ */
+export function validateChain(chain) {
+  if (chain.length <= 1) {
+    return { valid: true, invalidPositions: [], lastWrongPlayer: null };
+  }
+
+  const invalidPositions = new Set();
+  let lastWrongPlayer = null;
+  let lastWrongTurnNumber = -1;
+
+  for (let i = 1; i < chain.length; i++) {
+    if (chain[i].hiddenValue < chain[i - 1].hiddenValue) {
+      invalidPositions.add(i);
+      invalidPositions.add(i - 1);
+
+      // The more recently placed card in this pair is the culprit
+      const a = chain[i - 1];
+      const b = chain[i];
+      const culprit = (b.turnNumber ?? 0) >= (a.turnNumber ?? 0) ? b : a;
+
+      if ((culprit.turnNumber ?? 0) > lastWrongTurnNumber && culprit.placedBy != null) {
+        lastWrongTurnNumber = culprit.turnNumber ?? 0;
+        lastWrongPlayer = String(culprit.placedBy);
+      }
+    }
+  }
+
+  return {
+    valid: invalidPositions.size === 0,
+    invalidPositions: [...invalidPositions].sort((a, b) => a - b),
+    lastWrongPlayer,
+  };
+}
+
+/**
+ * Resolve a challenge: reveal chain and determine who gets the penalty.
+ *
+ * @param {Array} chain - current chain (may contain face-down cards)
+ * @param {string} challengerId - userId of the challenger
  * @returns {{
- *   bluffCaught: boolean,
- *   newChain: Array,
- *   scoreDeltaPlacer: number,
- *   scoreDeltaChallenger: number,
+ *   chainValid: boolean,
+ *   revealedChain: Array,
+ *   penaltyPlayer: string|null,
+ *   penaltyCards: number,
+ *   invalidPositions: number[],
  *   reason: string,
  * }}
  */
-export function resolveChallenge(chain, position, card, placerId, challengerId) {
-  const { valid } = validateMove(
-    // Temporarily remove the challenged card from chain for validation
-    removeCard(chain, position),
-    card,
-    position
-  );
+export function resolveChallenge(chain, challengerId) {
+  const revealed = revealChain(chain);
+  const { valid, invalidPositions, lastWrongPlayer } = validateChain(revealed);
 
   if (valid) {
-    // Bluff held — placer wins
     return {
-      bluffCaught: false,
-      newChain: revealCard(chain, position),
-      scoreDeltaPlacer: SCORE.BLUFF_HELD,
-      scoreDeltaChallenger: SCORE.CHALLENGE_LOSE,
-      reason: 'bluff_held',
-    };
-  } else {
-    // Bluff caught — challenger wins, card removed
-    return {
-      bluffCaught: true,
-      newChain: removeCard(chain, position),
-      scoreDeltaPlacer: SCORE.BLUFF_CAUGHT,
-      scoreDeltaChallenger: SCORE.CHALLENGE_WIN,
-      reason: 'bluff_caught',
+      chainValid: true,
+      revealedChain: revealed,
+      penaltyPlayer: String(challengerId),
+      penaltyCards: PENALTY_CARDS,
+      invalidPositions: [],
+      reason: 'chain_valid',
     };
   }
+
+  return {
+    chainValid: false,
+    revealedChain: revealed,
+    penaltyPlayer: lastWrongPlayer,
+    penaltyCards: PENALTY_CARDS,
+    invalidPositions,
+    reason: 'chain_invalid',
+  };
 }
 
 /**
- * Apply a score delta to a player in the session players map.
+ * Apply a score delta to a player in the players map.
  * Returns updated players object (immutable).
  *
- * @param {Object} players - { [userId]: { score, turnOrder } }
+ * @param {Object} players - { [userId]: { score, ... } }
  * @param {string|number} userId
  * @param {number} delta
  * @returns {Object}
@@ -174,37 +204,39 @@ export function applyScore(players, userId, delta) {
 }
 
 /**
- * Check if game should end (chain reached max length or deck is exhausted).
+ * Check if game should end.
+ * Game ends when any player has 0 cards in hand.
  *
- * @param {Array} chain
- * @param {number} maxChainLength
- * @param {number} remainingCards - cards left in deck for this session
+ * @param {Object} players - { [userId]: { hand: [...], ... } }
  * @returns {boolean}
  */
-export function isGameOver(chain, maxChainLength, remainingCards) {
-  return chain.length >= maxChainLength || remainingCards <= 0;
+export function isGameOver(players) {
+  for (const [, player] of Object.entries(players)) {
+    if (player.hand && player.hand.length === 0) return true;
+  }
+  return false;
 }
 
 /**
- * Determine winner(s) from the players object.
+ * Determine winner(s) — players with fewest cards in hand.
  * @param {Object} players
- * @returns {Array<string>} array of userIds with highest score
+ * @returns {Array<string>} array of userIds
  */
 export function getWinners(players) {
   const entries = Object.entries(players);
   if (!entries.length) return [];
-  const maxScore = Math.max(...entries.map(([, p]) => p.score));
-  return entries.filter(([, p]) => p.score === maxScore).map(([id]) => id);
+  const minCards = Math.min(...entries.map(([, p]) => p.hand?.length ?? Infinity));
+  return entries
+    .filter(([, p]) => (p.hand?.length ?? Infinity) === minCards)
+    .map(([id]) => id);
 }
 
 /**
- * Select a random card from a deck, excluding already-used card IDs.
- * @param {Array<Object>} deckCards - all cards in deck
- * @param {Set<number>} usedCardIds
- * @returns {Object|null}
+ * Get the next player index in turn order (wraps around).
+ * @param {number} currentIndex
+ * @param {number} playerCount
+ * @returns {number}
  */
-export function drawCard(deckCards, usedCardIds) {
-  const available = deckCards.filter((c) => !usedCardIds.has(c.id));
-  if (!available.length) return null;
-  return available[Math.floor(Math.random() * available.length)];
+export function getNextPlayerIndex(currentIndex, playerCount) {
+  return (currentIndex + 1) % playerCount;
 }

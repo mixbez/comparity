@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
 import { useGameStore } from '../store/gameStore.js';
 import ChainArea from './chain/ChainArea.jsx';
-import PlayerCard from './cards/PlayerCard.jsx';
+import Hand from './cards/Hand.jsx';
 import ScoreBar from './ui/ScoreBar.jsx';
 import ResultBanner from './ui/ResultBanner.jsx';
 import ChallengeButton from './ui/ChallengeButton.jsx';
+import ChallengeReveal from './ui/ChallengeReveal.jsx';
 import GameOverScreen from './ui/GameOverScreen.jsx';
 
 export default function GameScreen() {
-  const { session, status, lastResult, clearResult } = useGameStore();
+  const { session, status, lastResult, challengeResult, clearResult } = useGameStore();
 
   useEffect(() => {
     if (lastResult) {
@@ -21,9 +22,16 @@ export default function GameScreen() {
 
   const tg = window.Telegram?.WebApp;
   const userId = String(tg?.initDataUnsafe?.user?.id);
-  const myScore = session?.players?.[userId]?.score ?? 0;
-  const pendingChallenge = session?.pendingChallenge;
-  const isMyTurn = session?.currentTurn?.userId === userId;
+  const myPlayer = session?.players?.[userId];
+  const myScore = myPlayer?.score ?? 0;
+  const myHandCount = myPlayer?.handCount ?? myPlayer?.hand?.length ?? 0;
+
+  const currentPlayerId = session?.turnOrder?.[session?.currentPlayerIndex];
+  const isMyTurn = currentPlayerId === userId;
+  const canChallenge = isMyTurn
+    && session?.lastMoveBy
+    && session?.lastMoveBy !== userId
+    && session?.chain?.length > 1;
 
   return (
     <div className="flex flex-col h-screen bg-tg-bg overflow-hidden">
@@ -35,29 +43,58 @@ export default function GameScreen() {
               {session?.deckName}
             </p>
             <p className="text-sm font-semibold text-tg-text">
-              Параметр: {session?.deckParameterName}
+              {session?.deckParameterName}
             </p>
           </div>
-          <ScoreBar score={myScore} />
+          <ScoreBar score={myScore} handCount={myHandCount} />
         </div>
+
+        {/* Player indicators */}
+        {session?.turnOrder?.length > 1 && (
+          <div className="flex gap-2 mt-2">
+            {session.turnOrder.map((pid, i) => (
+              <div
+                key={pid}
+                className={`text-xs px-2 py-0.5 rounded-full ${
+                  pid === currentPlayerId
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                {pid === userId ? 'Ты' : `P${i + 1}`}
+                {' '}({session.players?.[pid]?.handCount ?? '?'})
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Chain */}
+      {/* Chain or Challenge Reveal */}
       <div className="flex-1 overflow-hidden relative">
-        <ChainArea chain={session?.chain ?? []} />
+        {challengeResult ? (
+          <ChallengeReveal result={challengeResult} />
+        ) : (
+          <ChainArea chain={session?.chain ?? []} />
+        )}
       </div>
 
       {/* Result banner */}
       {lastResult && <ResultBanner result={lastResult} />}
 
-      {/* Challenge button (shown when there's a bluff to challenge) */}
-      {pendingChallenge && !isMyTurn && (
-        <ChallengeButton expiresAt={pendingChallenge.expiresAt} />
-      )}
-
-      {/* Player card in hand + confirm action */}
+      {/* Bottom area */}
       <div className="flex-shrink-0">
-        <PlayerCard />
+        {canChallenge && <ChallengeButton />}
+        {isMyTurn ? (
+          <Hand />
+        ) : (
+          !challengeResult && (
+            <div className="p-4 text-center text-tg-hint text-sm">
+              {session?.turnOrder?.length <= 1
+                ? 'Ждём других игроков...'
+                : 'Ход другого игрока...'}
+            </div>
+          )
+        )}
       </div>
     </div>
   );

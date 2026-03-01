@@ -1,5 +1,5 @@
 import { startGame, handleGroupStart } from './play.js';
-import { processChallenge } from '../../game/session.js';
+import { processChallenge, joinSession } from '../../game/session.js';
 
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
@@ -17,7 +17,28 @@ export async function handleCallback(ctx) {
     return startGame(ctx, deckId);
   }
 
-  // Challenge button
+  // Join game
+  if (data.startsWith('join:')) {
+    const sessionId = data.split(':')[1];
+    const userId = ctx.from.id;
+
+    try {
+      await ctx.answerCbQuery();
+      const { session } = await joinSession({ sessionId, userId });
+      const handCount = session.players[String(userId)]?.hand?.length ?? 0;
+      await ctx.reply(
+        `🤝 *${ctx.from.first_name}* присоединился к игре!\n` +
+        `🃏 Получено ${handCount} карт.`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      console.error('[Callback] Join error:', err.message);
+      await ctx.answerCbQuery(err.message, { show_alert: true });
+    }
+    return;
+  }
+
+  // Challenge button (from group chat inline buttons)
   if (data.startsWith('challenge:')) {
     console.log('[Callback] Processing challenge');
     const sessionId = data.split(':')[1];
@@ -27,17 +48,14 @@ export async function handleCallback(ctx) {
       console.log('[Callback] Challenge data:', { sessionId, challengerId });
       await ctx.answerCbQuery();
       const result = await processChallenge({ sessionId, challengerId });
-      console.log('[Callback] Challenge resolved:', { bluffCaught: result.bluffCaught });
-      const icon = result.bluffCaught ? '🎯' : '🛡';
-      const msg = result.bluffCaught
-        ? `${icon} Блеф пойман! Карта убрана из цепочки.`
-        : `${icon} Блеф устоял! Карта раскрыта и остаётся.`;
+      console.log('[Callback] Challenge resolved:', { chainValid: result.chainValid });
 
-      await ctx.reply(msg + `\n\n📊 Обновлённые очки:` +
-        Object.entries(result.players)
-          .map(([uid, p]) => `\n  ID ${uid}: ${p.score} очков`)
-          .join('')
-      );
+      const icon = result.chainValid ? '✅' : '❌';
+      const msg = result.chainValid
+        ? `${icon} Цепочка верна! Оспоривший получает штрафные карты.`
+        : `${icon} Порядок нарушен! Нарушитель получает штрафные карты.`;
+
+      await ctx.reply(msg);
       console.log('[Callback] Challenge reply sent successfully');
     } catch (err) {
       console.error('[Callback] Challenge error:', {

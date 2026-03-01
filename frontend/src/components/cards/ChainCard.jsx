@@ -16,7 +16,7 @@ export default function ChainCard({ card, isDragging = false }) {
         // Face-down card (bluff)
         <div className="h-full flex flex-col items-center justify-center text-white">
           <div className="text-3xl mb-1">🃏</div>
-          <p className="text-xs opacity-70 text-center px-1">Блеф?</p>
+          <p className="text-xs opacity-70 text-center px-1">?</p>
         </div>
       ) : (
         // Face-up card

@@ -1,35 +1,23 @@
 import React from 'react';
 
 const RESULT_CONFIG = {
-  correct: {
+  card_placed: {
+    icon: '🃏',
+    text: 'Карта поставлена!',
+    sub: 'Ждём следующий ход...',
+    bg: 'bg-indigo-600',
+  },
+  chain_valid: {
     icon: '✅',
-    text: 'Правильно!',
-    sub: '+1 очко',
+    text: 'Цепочка верна!',
+    sub: 'Оспоривший получает штраф',
     bg: 'bg-green-500',
   },
-  incorrect: {
+  chain_invalid: {
     icon: '❌',
-    text: 'Неверно!',
-    sub: 'Карточка не подходит',
+    text: 'Порядок нарушен!',
+    sub: 'Нарушитель получает штрафные карты',
     bg: 'bg-red-500',
-  },
-  bluff_placed: {
-    icon: '🎭',
-    text: 'Блеф сыгран!',
-    sub: 'Ждём оспаривания...',
-    bg: 'bg-purple-600',
-  },
-  bluff_caught: {
-    icon: '🎯',
-    text: 'Блеф раскрыт!',
-    sub: '+2 очка за раскрытие',
-    bg: 'bg-orange-500',
-  },
-  bluff_held: {
-    icon: '🛡',
-    text: 'Блеф устоял!',
-    sub: '+2 очка защитнику',
-    bg: 'bg-indigo-600',
   },
   error: {
     icon: '⚠️',
@@ -55,7 +43,7 @@ export default function ResultBanner({ result }) {
       <span className="text-2xl">{config.icon}</span>
       <div>
         <p className="font-bold text-sm">{config.text}</p>
-        <p className="text-xs opacity-80">{config.sub}</p>
+        <p className="text-xs opacity-80">{result.message || config.sub}</p>
       </div>
     </div>
   );
