@@ -53,7 +53,7 @@ export default function PlayerCard() {
     <div className="bg-tg-secondary border-t border-gray-200">
       {/* Instructions */}
       <p className="text-center text-xs text-tg-hint pt-3 pb-1">
-        Перетащи карту в нужное место цепочки
+        Тапни на «+» в цепочке или перетащи карту
       </p>
 
       <div className="flex items-center gap-3 px-4 pb-4">
@@ -86,12 +86,18 @@ export default function PlayerCard() {
                   src={card.imageUrl}
                   alt={card.title}
                   className="w-full h-20 object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="w-full h-20 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center text-3xl">
-                  🎴
-                </div>
-              )}
+              ) : null}
+              <div
+                className="w-full h-20 bg-gradient-to-br from-blue-50 to-indigo-100 items-center justify-center text-3xl"
+                style={{ display: card.imageUrl ? 'none' : 'flex' }}
+              >
+                🎴
+              </div>
               <div className="flex-1 px-2 py-1.5 flex flex-col">
                 <p className="text-xs font-semibold text-gray-800 leading-tight line-clamp-2">
                   {card.title}
@@ -107,18 +113,20 @@ export default function PlayerCard() {
 
         {/* Controls */}
         <div className="flex-1 flex flex-col gap-2">
-          {/* Bluff toggle */}
-          <button
-            onClick={toggleBluffMode}
-            className={`
-              w-full py-2.5 px-3 rounded-xl text-sm font-medium transition-all
-              ${isBluffMode
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'bg-white border border-gray-200 text-gray-600'}
-            `}
-          >
-            {isBluffMode ? '🎭 Блеф вкл.' : '🎭 Блефовать'}
-          </button>
+          {/* Bluff toggle — only in multiplayer */}
+          {session?.type !== 'SOLO' && (
+            <button
+              onClick={toggleBluffMode}
+              className={`
+                w-full py-2.5 px-3 rounded-xl text-sm font-medium transition-all
+                ${isBluffMode
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-white border border-gray-200 text-gray-600'}
+              `}
+            >
+              {isBluffMode ? '🎭 Блеф вкл.' : '🎭 Блефовать'}
+            </button>
+          )}
 
           {/* Confirm placement */}
           <button

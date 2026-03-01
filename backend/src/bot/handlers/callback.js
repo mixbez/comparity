@@ -5,10 +5,10 @@ import { Markup } from 'telegraf';
 
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
-  await ctx.answerCbQuery();
 
   // Deck selection from /start or /decks
   if (data.startsWith('deck:') || data.startsWith('play:')) {
+    await ctx.answerCbQuery();
     const deckId = parseInt(data.split(':')[1]);
     return startGame(ctx, deckId);
   }
@@ -17,34 +17,39 @@ export async function handleCallback(ctx) {
   if (data.startsWith('group_start:')) {
     const deckId = parseInt(data.split(':')[1]);
     const userId = ctx.from.id;
-    const chatId = ctx.chat?.id;
+    // For inline messages ctx.chat is null — get chatId from message if available
+    const chatId = ctx.callbackQuery.message?.chat?.id ?? null;
 
-    if (!chatId) return ctx.answerCbQuery('Только для групповых чатов');
+    try {
+      const { sessionId, session } = await createSession({
+        userId,
+        deckId,
+        type: 'GROUP',
+        chatId,
+      });
 
-    const { sessionId, session } = await createSession({
-      userId,
-      deckId,
-      type: 'GROUP',
-      chatId,
-    });
+      const startingCard = session.chain[0];
+      const nextCard = session.currentTurn?.card;
+      const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
 
-    const startingCard = session.chain[0];
-    const nextCard = session.currentTurn?.card;
-    const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
-
-    await ctx.editMessageText(
-      `🎮 *Групповая игра: ${session.deckName}*\n\n` +
-      `📏 Параметр: *${session.deckParameterName}*\n\n` +
-      `🃏 Цепочка начата с: *${startingCard.title}* (${startingCard.displayValue})\n\n` +
-      `Следующая карта: *${nextCard?.title || '?'}*\nКуда её поставить?`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
-          [Markup.button.callback('⚔️ Оспорить!', `challenge:${sessionId}`)],
-        ]),
-      }
-    );
+      await ctx.editMessageText(
+        `🎮 *Групповая игра: ${session.deckName}*\n\n` +
+        `📏 Параметр: *${session.deckParameterName}*\n\n` +
+        `🃏 Цепочка начата с: *${startingCard.title}* (${startingCard.displayValue})\n\n` +
+        `Следующая карта: *${nextCard?.title || '?'}*\nКуда её поставить?`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.webApp('🎯 Открыть игру', miniAppUrl)],
+            [Markup.button.callback('⚔️ Оспорить!', `challenge:${sessionId}`)],
+          ]),
+        }
+      );
+      await ctx.answerCbQuery();
+    } catch (err) {
+      console.error('[Callback] group_start error:', err.message, err.stack);
+      await ctx.answerCbQuery(`Ошибка: ${err.message}`, { show_alert: true }).catch(() => {});
+    }
     return;
   }
 
@@ -54,6 +59,7 @@ export async function handleCallback(ctx) {
     const challengerId = ctx.from.id;
 
     try {
+      await ctx.answerCbQuery();
       const result = await processChallenge({ sessionId, challengerId });
       const icon = result.bluffCaught ? '🎯' : '🛡';
       const msg = result.bluffCaught
@@ -66,8 +72,10 @@ export async function handleCallback(ctx) {
           .join('')
       );
     } catch (err) {
-      await ctx.answerCbQuery(err.message, { show_alert: true });
+      await ctx.answerCbQuery(err.message, { show_alert: true }).catch(() => {});
     }
     return;
   }
+
+  await ctx.answerCbQuery();
 }
