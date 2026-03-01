@@ -30,6 +30,7 @@ export default function ChallengeButton({ expiresAt }) {
           />
         </div>
         <button
+          type="button"
           onClick={challenge}
           disabled={status === 'loading'}
           className="
