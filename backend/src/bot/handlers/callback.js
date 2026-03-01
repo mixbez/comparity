@@ -19,6 +19,16 @@ export async function handleCallback(ctx) {
     console.log('[Callback] Processing group_start');
     const deckId = parseInt(data.split(':')[1]);
     const userId = ctx.from.id;
+
+    // Debug: check all possible sources of chat ID
+    console.log('[Callback] Debug chat info:', {
+      'ctx.chat?.id': ctx.chat?.id,
+      'ctx.callbackQuery.message?.chat?.id': ctx.callbackQuery.message?.chat?.id,
+      'ctx.callbackQuery.message?.chat': ctx.callbackQuery.message?.chat,
+      'ctx.callbackQuery.inline_message_id': ctx.callbackQuery.inline_message_id,
+      'ctx.callbackQuery.message?.message_id': ctx.callbackQuery.message?.message_id,
+    });
+
     // For inline messages ctx.chat is null — get chatId from message if available
     const chatId = ctx.callbackQuery.message?.chat?.id ?? null;
 
