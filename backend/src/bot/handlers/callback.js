@@ -1,6 +1,19 @@
 import { startGame, handleGroupStart } from './play.js';
 import { processChallenge } from '../../game/session.js';
 
+// Build Mini App URL with support for Telegram deep links in groups
+function buildMiniAppUrl(sessionId, isGroup = false) {
+  const baseUrl = process.env.MINI_APP_URL;
+
+  // For groups, optionally use Telegram deep link if bot username is configured
+  if (isGroup && process.env.BOT_USERNAME && process.env.MINI_APP_SHORT_NAME) {
+    return `https://t.me/${process.env.BOT_USERNAME}/${process.env.MINI_APP_SHORT_NAME}?startapp=${sessionId}`;
+  }
+
+  // Fallback: direct URL for both private and groups
+  return `${baseUrl}?sessionId=${sessionId}`;
+}
+
 export async function handleCallback(ctx) {
   const data = ctx.callbackQuery.data;
   console.log('[Callback] Received:', { data, userId: ctx.from.id, chatId: ctx.chat?.id });

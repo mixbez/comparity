@@ -45,7 +45,7 @@ export async function startGame(ctx, deckId, gameType = 'SOLO') {
     const startingCard = session.chain[0];
     const nextCard = session.currentTurn?.card;
 
-    const miniAppUrl = `${process.env.MINI_APP_URL}?sessionId=${sessionId}`;
+    const miniAppUrl = buildMiniAppUrl(sessionId, isGroup);
     console.log('[Play] Session created:', {
       sessionId,
       deckName: session.deckName,
@@ -97,4 +97,16 @@ export async function startGame(ctx, deckId, gameType = 'SOLO') {
     });
     await ctx.reply('❌ Не удалось создать игру. Попробуй ещё раз.');
   }
+}
+
+function buildMiniAppUrl(sessionId, isGroup) {
+  const baseUrl = process.env.MINI_APP_URL;
+
+  // For groups, optionally use Telegram deep link if bot username is configured
+  if (isGroup && process.env.BOT_USERNAME && process.env.MINI_APP_SHORT_NAME) {
+    return `https://t.me/${process.env.BOT_USERNAME}/${process.env.MINI_APP_SHORT_NAME}?startapp=${sessionId}`;
+  }
+
+  // Fallback: direct URL for both private and groups
+  return `${baseUrl}?sessionId=${sessionId}`;
 }
