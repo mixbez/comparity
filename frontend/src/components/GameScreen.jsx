@@ -28,9 +28,10 @@ export default function GameScreen() {
 
   const currentPlayerId = session?.turnOrder?.[session?.currentPlayerIndex];
   const isMyTurn = currentPlayerId === userId;
+  const isSolo = (session?.turnOrder?.length ?? 0) <= 1;
   const canChallenge = isMyTurn
     && session?.lastMoveBy
-    && session?.lastMoveBy !== userId
+    && (isSolo || session?.lastMoveBy !== userId)
     && session?.chain?.length > 1;
 
   return (

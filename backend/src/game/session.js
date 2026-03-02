@@ -112,7 +112,10 @@ export async function joinSession({ sessionId, userId }) {
   if (!session) throw new GameError('Session not found', 404);
 
   const uid = String(userId);
-  if (session.players[uid]) throw new GameError('Already in this game', 400);
+  if (session.players[uid]) {
+    // Already in game — return current session (idempotent)
+    return { session, joined: false };
+  }
   if (session.status !== 'ACTIVE') {
     throw new GameError('Cannot join this game', 400);
   }
@@ -152,7 +155,7 @@ export async function joinSession({ sessionId, userId }) {
     playersInfo: getPlayersInfo(updatedSession.players),
   });
 
-  return { session: updatedSession };
+  return { session: updatedSession, joined: true };
 }
 
 /**
@@ -260,7 +263,8 @@ export async function processChallenge({ sessionId, challengerId }) {
     throw new GameError('No moves to challenge', 400);
   }
 
-  if (uid === session.lastMoveBy) {
+  // In multiplayer, can't challenge right after your own move
+  if (session.turnOrder.length > 1 && uid === session.lastMoveBy) {
     throw new GameError('Cannot challenge right after your own move', 400);
   }
 

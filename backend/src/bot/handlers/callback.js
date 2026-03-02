@@ -24,13 +24,18 @@ export async function handleCallback(ctx) {
 
     try {
       await ctx.answerCbQuery();
-      const { session } = await joinSession({ sessionId, userId });
-      const handCount = session.players[String(userId)]?.hand?.length ?? 0;
-      await ctx.reply(
-        `🤝 *${ctx.from.first_name}* присоединился к игре!\n` +
-        `🃏 Получено ${handCount} карт.`,
-        { parse_mode: 'Markdown' }
-      );
+      const { session, joined } = await joinSession({ sessionId, userId });
+
+      if (!joined) {
+        await ctx.reply('Ты уже в игре!');
+      } else {
+        const handCount = session.players[String(userId)]?.hand?.length ?? 0;
+        await ctx.reply(
+          `🤝 *${ctx.from.first_name}* присоединился к игре!\n` +
+          `🃏 Получено ${handCount} карт.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
     } catch (err) {
       console.error('[Callback] Join error:', err.message);
       await ctx.answerCbQuery(err.message, { show_alert: true });
