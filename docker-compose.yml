@@ -60,6 +60,24 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+  backend-writershadow:
+    build: ../writershadow
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      BOT_TOKEN: ${WRITERSHADOW_BOT_TOKEN}
+      BOT_WEBHOOK_URL: https://v2202504269079335176.supersrv.de/ws-webhook
+      DATABASE_URL: postgresql://writershadow:${WRITERSHADOW_DB_PASS}@postgres:5432/writershadow
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_PREFIX: "writershadow:"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ADMIN_USER_ID: ${ADMIN_USER_ID}
+      OWNER_CONTACT: ${OWNER_CONTACT}
+    depends_on:
+      - postgres
+      - redis
 
   frontend:
     build:
@@ -71,8 +89,26 @@ services:
     depends_on:
       - backend
 
+  backend-flightdeals:
+    build: ../flight-deals
+    restart: unless-stopped
+    environment:
+      AVIASALES_TOKEN: ${AVIASALES_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${FLIGHTDEALS_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${ADMIN_USER_ID}
+      WEBHOOK_HOST: https://v2202504269079335176.supersrv.de
+      WEBHOOK_PORT: 443
+      LISTEN_PORT: 8080
+      WEBHOOK_PATH: /webhook-flightdeals
+    ports:
+      - "8080:8080"
+    volumes:
+      - flightdeals_state:/app/data
+
 volumes:
   pg_data:
   redis_data:
   caddy_data:
   caddy_config:
+  flightdeals_state:
+
